@@ -4,6 +4,8 @@ An MCP (Model Context Protocol) server for interacting with the Zoho Projects v2
 
 ## Features
 
+- **Task Updates**: Update task status and completion percentage
+- **Task Statuses**: List valid task statuses for a project (with fallback defaults)
 - **Task Comments**: Add, update, delete, and list comments on tasks
 - **Helper Tools**: List portals, projects, and tasks to get required IDs
 - **OAuth Support**: Automatic token refresh using refresh tokens
@@ -97,6 +99,33 @@ Parameters:
 - `project_id` (required): The project ID
 - `task_id` (required): The task ID
 - `comment_id` (required): The comment ID to delete
+
+### Task Update Tool
+
+#### `list_task_statuses`
+List all available task statuses for a project so you can supply valid values when updating tasks. If the API call fails, it returns a known fallback set:
+
+- `1013893000003815509` = In Review
+- `1013893000001076068` = Open
+- `1013893000010930025` = Need More Information
+- `1013893000013190027` = With Client
+- `1013893000001076071` = Closed
+- `1013893000016215201` = Awaiting Approval
+
+Parameters:
+- `portal_id` (required): The Zoho Projects portal ID
+- `project_id` (required): The project ID
+
+#### `update_task_status`
+Update a task's status and/or completion percentage. Provide at least one of `status`, `status_id`, or `percent_complete`.
+
+Parameters:
+- `portal_id` (required): The Zoho Projects portal ID
+- `project_id` (required): The project ID
+- `task_id` (required): The task ID to update
+- `status`: New task status (must match a valid Zoho Projects task status)
+- `status_id`: Task status ID (use `list_task_statuses` to discover valid values)
+- `percent_complete`: Completion percentage from 0 to 100
 
 ### Helper Tools
 

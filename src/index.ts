@@ -22,9 +22,22 @@ function getBaseUrl(): string {
   return `https://projectsapi.${ZOHO_DOMAIN}/restapi`;
 }
 
+function getApiV3BaseUrl(): string {
+  return `https://projectsapi.${ZOHO_DOMAIN}/api/v3`;
+}
+
 function getAccountsUrl(): string {
   return `https://accounts.${ZOHO_DOMAIN}`;
 }
+
+const FALLBACK_TASK_STATUSES = [
+  { id: "1013893000003815509", name: "In Review" },
+  { id: "1013893000001076068", name: "Open" },
+  { id: "1013893000010930025", name: "Need More Information" },
+  { id: "1013893000013190027", name: "With Client" },
+  { id: "1013893000001076071", name: "Closed" },
+  { id: "1013893000016215201", name: "Awaiting Approval" },
+] as const;
 
 // Refresh access token using refresh token
 async function refreshAccessToken(): Promise<string> {
@@ -84,6 +97,41 @@ async function zohoRequest(
   let response = await makeRequest(accessToken!);
 
   // If unauthorized, try refreshing the token once
+  if (response.status === 401) {
+    await refreshAccessToken();
+    response = await makeRequest(accessToken!);
+  }
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Zoho API error (${response.status}): ${error}`);
+  }
+
+  return response.json();
+}
+
+// Make authenticated API request to Zoho API v3 (JSON)
+async function zohoRequestV3(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<unknown> {
+  if (!accessToken) {
+    await refreshAccessToken();
+  }
+
+  const makeRequest = async (token: string): Promise<Response> => {
+    return fetch(`${getApiV3BaseUrl()}${endpoint}`, {
+      ...options,
+      headers: {
+        Authorization: `Zoho-oauthtoken ${token}`,
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
+  };
+
+  let response = await makeRequest(accessToken!);
+
   if (response.status === 401) {
     await refreshAccessToken();
     response = await makeRequest(accessToken!);
@@ -298,6 +346,64 @@ const tools: Tool[] = [
       required: ["portal_id", "project_id"],
     },
   },
+  {
+    name: "list_task_statuses",
+    description:
+      "List all available task statuses for a project. Falls back to a known set when the API call fails.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: {
+          type: "string",
+          description: "The Zoho Projects portal ID",
+        },
+        project_id: {
+          type: "string",
+          description: "The project ID to list task statuses from",
+        },
+      },
+      required: ["portal_id", "project_id"],
+    },
+  },
+  {
+    name: "update_task_status",
+    description:
+      "Update a task's status and/or completion percentage. Requires ZohoProjects.tasks.UPDATE scope.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: {
+          type: "string",
+          description: "The Zoho Projects portal ID",
+        },
+        project_id: {
+          type: "string",
+          description: "The project ID containing the task",
+        },
+        task_id: {
+          type: "string",
+          description: "The task ID to update",
+        },
+        status: {
+          type: "string",
+          description:
+            "New task status (must match a valid Zoho Projects task status)",
+        },
+        status_id: {
+          type: "string",
+          description:
+            "Task status ID (use list_task_statuses to discover valid values)",
+        },
+        percent_complete: {
+          type: "number",
+          description: "Completion percentage from 0 to 100",
+          minimum: 0,
+          maximum: 100,
+        },
+      },
+      required: ["portal_id", "project_id", "task_id"],
+    },
+  },
 ];
 
 // Tool handlers
@@ -407,6 +513,76 @@ async function handleListTasks(args: {
   );
 }
 
+async function handleListTaskStatuses(args: {
+  portal_id: string;
+  project_id: string;
+}): Promise<unknown> {
+  try {
+    const result = await zohoRequest(
+      `/portal/${args.portal_id}/projects/${args.project_id}/taskstatuses/`
+    );
+
+    return {
+      source: "api",
+      data: result,
+      fallback_statuses: FALLBACK_TASK_STATUSES,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      source: "fallback",
+      error: message,
+      statuses: FALLBACK_TASK_STATUSES,
+    };
+  }
+}
+
+async function handleUpdateTaskStatus(args: {
+  portal_id: string;
+  project_id: string;
+  task_id: string;
+  status?: string;
+  status_id?: string;
+  percent_complete?: number;
+}): Promise<unknown> {
+  if (
+    args.status === undefined &&
+    args.status_id === undefined &&
+    args.percent_complete === undefined
+  ) {
+    throw new Error(
+      "Provide at least one of status, status_id, or percent_complete to update the task"
+    );
+  }
+
+  if (
+    args.percent_complete !== undefined &&
+    (args.percent_complete < 0 || args.percent_complete > 100)
+  ) {
+    throw new Error("percent_complete must be between 0 and 100");
+  }
+
+  const payload: Record<string, unknown> = {};
+
+  if (args.status_id !== undefined) {
+    payload.status = { id: args.status_id };
+  } else if (args.status !== undefined) {
+    payload.status = { name: args.status };
+  }
+
+  if (args.percent_complete !== undefined) {
+    payload.completion_percentage = args.percent_complete;
+  }
+
+  return zohoRequestV3(
+    `/portal/${args.portal_id}/projects/${args.project_id}/tasks/${args.task_id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
 // Create and configure the MCP server
 const server = new Server(
   {
@@ -463,6 +639,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "list_tasks":
         result = await handleListTasks(
           args as Parameters<typeof handleListTasks>[0]
+        );
+        break;
+      case "list_task_statuses":
+        result = await handleListTaskStatuses(
+          args as Parameters<typeof handleListTaskStatuses>[0]
+        );
+        break;
+      case "update_task_status":
+        result = await handleUpdateTaskStatus(
+          args as Parameters<typeof handleUpdateTaskStatus>[0]
         );
         break;
       default:
