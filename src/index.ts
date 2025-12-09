@@ -1350,6 +1350,38 @@ async function handleAddTaskDependency(args: {
   );
 }
 
+// Server instructions for LLM agents
+const SERVER_INSTRUCTIONS = `
+Zoho Projects MCP Server - Formatting Guidelines
+
+When creating or updating task descriptions and comments, use HTML formatting instead of Markdown.
+Zoho Projects uses a rich text editor that renders HTML, not Markdown.
+
+Supported HTML tags:
+- Text formatting: <b>, <strong>, <i>, <em>, <u>, <s>, <strike>
+- Paragraphs and breaks: <p>, <br>, <div>
+- Lists: <ul>, <ol>, <li>
+- Links: <a href="url">text</a>
+- Headings: <h1> through <h6>
+- Preformatted/code: <pre>, <code>
+- Tables: <table>, <tr>, <td>, <th>, <thead>, <tbody>
+- Block quotes: <blockquote>
+- Horizontal rules: <hr>
+- Images: <img src="url" alt="description">
+- Subscript/Superscript: <sub>, <sup>
+- Font styling: <span style="color: #hex; font-size: Npx; font-family: name;">
+
+Example comment:
+<p><b>Summary:</b> Task completed successfully.</p>
+<ul>
+  <li>Fixed the authentication bug</li>
+  <li>Added unit tests</li>
+</ul>
+<p>See <a href="https://example.com/pr/123">PR #123</a> for details.</p>
+
+Do NOT use Markdown syntax (like **bold**, *italic*, [links](url), or \`code\`) as it will appear as plain text in Zoho Projects.
+`.trim();
+
 // Create and configure the MCP server
 const server = new Server(
   {
@@ -1360,6 +1392,7 @@ const server = new Server(
     capabilities: {
       tools: {},
     },
+    instructions: SERVER_INSTRUCTIONS,
   }
 );
 
