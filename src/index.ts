@@ -632,7 +632,7 @@ const tools: Tool[] = [
         priority: {
           type: "string",
           description: "Task priority",
-          enum: ["none", "low", "medium", "high"],
+          enum: ["None", "Low", "Medium", "High"],
         },
         owner_ids: {
           type: "array",
@@ -682,7 +682,7 @@ const tools: Tool[] = [
         priority: {
           type: "string",
           description: "Task priority",
-          enum: ["none", "low", "medium", "high"],
+          enum: ["None", "Low", "Medium", "High"],
         },
         percent_complete: {
           type: "number",
