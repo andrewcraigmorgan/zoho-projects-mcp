@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/index.ts`: MCP server implementation (Zoho Projects task tools, auth helpers).
+- `src/index.ts`: MCP server implementation (Zoho Projects task/tasklist tools, auth helpers).
 - `dist/`: Compiled output (`npm run build` writes here).
 - `package.json`, `tsconfig.json`: Build and tooling config. No dedicated test directory yet.
 
@@ -29,6 +29,6 @@ Testing: No test suite defined; add focused tests when you introduce non-trivial
 - PRs: Include summary, rationale, and any manual verification steps (build/test commands). Link issues/tickets when available. Screenshots not required unless UI changes occur.
 
 ## Security & Configuration Tips
-- Required env vars: `ZOHO_REFRESH_TOKEN`, `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`; optional `ZOHO_ACCESS_TOKEN`, `ZOHO_DOMAIN`.
+- Required env vars: `ZOHO_REFRESH_TOKEN`, `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`; optional `ZOHO_ACCESS_TOKEN`, `ZOHO_DOMAIN`, `ZOHO_USER_ID`.
 - Never commit secrets. Prefer `.env` in local dev; document required keys in PRs that add new configuration.
 - Network calls depend on valid tokens; handle 401s with token refresh (already implemented). Avoid logging tokens or sensitive payloads.***

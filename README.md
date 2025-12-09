@@ -9,7 +9,7 @@ An MCP (Model Context Protocol) server for interacting with the Zoho Projects v2
 - **Task Updates**: Update task status and completion percentage
 - **Task Statuses**: List valid task statuses for a project (with fallback defaults)
 - **Task Comments**: Add, update, delete, and list comments on tasks
-- **Task Lists**: List and create task lists (folders)
+- **Task Lists**: List, create, and update task lists (folders) with visibility control
 - **User Management**: List project users and get tasks assigned to you
 - **Helper Tools**: List portals, projects, and tasks to get required IDs
 - **OAuth Support**: Automatic token refresh using refresh tokens
@@ -49,11 +49,12 @@ The following scopes are required for full functionality:
 | `ZohoProjects.tasks.DELETE` | Delete tasks and comments |
 | `ZohoProjects.tasklists.READ` | List task lists |
 | `ZohoProjects.tasklists.CREATE` | Create task lists |
+| `ZohoProjects.tasklists.UPDATE` | Update task lists |
 
 **Comma-separated list for easy copying:**
 
 ```
-ZohoProjects.portals.READ,ZohoProjects.projects.READ,ZohoProjects.tasks.READ,ZohoProjects.tasks.CREATE,ZohoProjects.tasks.UPDATE,ZohoProjects.tasks.DELETE,ZohoProjects.tasklists.READ,ZohoProjects.tasklists.CREATE
+ZohoProjects.portals.READ,ZohoProjects.projects.READ,ZohoProjects.tasks.READ,ZohoProjects.tasks.CREATE,ZohoProjects.tasks.UPDATE,ZohoProjects.tasks.DELETE,ZohoProjects.tasklists.READ,ZohoProjects.tasklists.CREATE,ZohoProjects.tasklists.UPDATE
 ```
 
 ## Adding to Claude Code
@@ -189,6 +190,35 @@ Parameters:
 - `index`: Starting index (default: 0)
 - `range`: Number of tasks (default: 100)
 
+### Task List Tools
+
+#### `list_tasklists`
+List all task lists (folders) in a project.
+
+Parameters:
+- `portal_id` (required): The Zoho Projects portal ID
+- `project_id` (required): The project ID
+
+#### `create_tasklist`
+Create a new task list in a project.
+
+Parameters:
+- `portal_id` (required): The Zoho Projects portal ID
+- `project_id` (required): The project ID
+- `name` (required): Task list name
+- `milestone_id`: Optional milestone ID to associate with the task list
+- `visibility`: Visibility of the task list - `external` (visible to clients, default) or `internal` (team only)
+
+#### `update_tasklist`
+Update an existing task list.
+
+Parameters:
+- `portal_id` (required): The Zoho Projects portal ID
+- `project_id` (required): The project ID
+- `tasklist_id` (required): The task list ID to update
+- `name`: New task list name
+- `visibility`: Visibility of the task list - `external` (visible to clients) or `internal` (team only)
+
 ## Getting Zoho OAuth Credentials
 
 ### Step 1: Create a Self Client
@@ -204,7 +234,7 @@ Parameters:
 1. In the Self Client, go to the **Generate Code** tab
 2. Enter the scopes (comma-separated):
    ```
-   ZohoProjects.portals.READ,ZohoProjects.projects.READ,ZohoProjects.tasks.READ,ZohoProjects.tasks.CREATE,ZohoProjects.tasks.UPDATE,ZohoProjects.tasks.DELETE,ZohoProjects.tasklists.READ,ZohoProjects.tasklists.CREATE
+   ZohoProjects.portals.READ,ZohoProjects.projects.READ,ZohoProjects.tasks.READ,ZohoProjects.tasks.CREATE,ZohoProjects.tasks.UPDATE,ZohoProjects.tasks.DELETE,ZohoProjects.tasklists.READ,ZohoProjects.tasklists.CREATE,ZohoProjects.tasklists.UPDATE
    ```
 3. Set **Time Duration** to the maximum (10 minutes)
 4. Enter a **Scope Description** (e.g., "MCP Server Access")

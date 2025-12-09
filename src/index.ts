@@ -139,6 +139,7 @@ function slimTasklistResponse(raw: unknown, slim: boolean): unknown {
         id: tl.id,
         name: tl.name,
         milestone_id: (tl.milestone as Record<string, unknown>)?.id,
+        visibility: tl.flag, // 'external' or 'internal'
       })) || [],
   };
 }
@@ -765,8 +766,48 @@ const tools: Tool[] = [
           type: "string",
           description: "Optional milestone ID to associate with the task list",
         },
+        visibility: {
+          type: "string",
+          description:
+            "Visibility of the task list: 'external' (visible to clients) or 'internal' (team only). Defaults to 'external'.",
+          enum: ["external", "internal"],
+          default: "external",
+        },
       },
       required: ["portal_id", "project_id", "name"],
+    },
+  },
+  {
+    name: "update_tasklist",
+    description:
+      "Update a task list in a project. Requires ZohoProjects.tasklists.UPDATE scope.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: {
+          type: "string",
+          description: "The Zoho Projects portal ID",
+        },
+        project_id: {
+          type: "string",
+          description: "The project ID containing the task list",
+        },
+        tasklist_id: {
+          type: "string",
+          description: "The task list ID to update",
+        },
+        name: {
+          type: "string",
+          description: "New task list name",
+        },
+        visibility: {
+          type: "string",
+          description:
+            "Visibility of the task list: 'external' (visible to clients) or 'internal' (team only)",
+          enum: ["external", "internal"],
+        },
+      },
+      required: ["portal_id", "project_id", "tasklist_id"],
     },
   },
   // User tools
@@ -1175,16 +1216,43 @@ async function handleCreateTasklist(args: {
   project_id: string;
   name: string;
   milestone_id?: string;
+  visibility?: string;
 }): Promise<unknown> {
   const body = new URLSearchParams();
   body.set("name", args.name);
   if (args.milestone_id) body.set("milestone_id", args.milestone_id);
+  // Default to external visibility if not specified
+  body.set("flag", args.visibility ?? "external");
 
   return zohoRequest(
     `/portal/${args.portal_id}/projects/${args.project_id}/tasklists/`,
     {
       method: "POST",
       body: body.toString(),
+    }
+  );
+}
+
+async function handleUpdateTasklist(args: {
+  portal_id: string;
+  project_id: string;
+  tasklist_id: string;
+  name?: string;
+  visibility?: string;
+}): Promise<unknown> {
+  if (args.name === undefined && args.visibility === undefined) {
+    throw new Error("Provide at least one of name or visibility to update the task list");
+  }
+
+  const payload: Record<string, unknown> = {};
+  if (args.name) payload.name = args.name;
+  if (args.visibility) payload.flag = args.visibility;
+
+  return zohoRequestV3(
+    `/portal/${args.portal_id}/projects/${args.project_id}/tasklists/${args.tasklist_id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
     }
   );
 }
@@ -1382,6 +1450,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "create_tasklist":
         result = await handleCreateTasklist(
           args as Parameters<typeof handleCreateTasklist>[0]
+        );
+        break;
+      case "update_tasklist":
+        result = await handleUpdateTasklist(
+          args as Parameters<typeof handleUpdateTasklist>[0]
         );
         break;
       // User tools
