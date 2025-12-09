@@ -4,9 +4,13 @@ An MCP (Model Context Protocol) server for interacting with the Zoho Projects v2
 
 ## Features
 
+- **Task Management**: Create, update, delete tasks and manage assignments
+- **Task Dependencies**: Create predecessor/successor relationships between tasks
 - **Task Updates**: Update task status and completion percentage
 - **Task Statuses**: List valid task statuses for a project (with fallback defaults)
 - **Task Comments**: Add, update, delete, and list comments on tasks
+- **Task Lists**: List and create task lists (folders)
+- **User Management**: List project users and get tasks assigned to you
 - **Helper Tools**: List portals, projects, and tasks to get required IDs
 - **OAuth Support**: Automatic token refresh using refresh tokens
 
@@ -29,30 +33,44 @@ npm run build
 | `ZOHO_CLIENT_ID` | Your Zoho API client ID |
 | `ZOHO_CLIENT_SECRET` | Your Zoho API client secret |
 | `ZOHO_DOMAIN` | Zoho domain (default: `zoho.com`). Use `zoho.eu`, `zoho.in`, etc. for other regions |
+| `ZOHO_USER_ID` | Your Zoho user ID (optional, for default task assignment) |
 
 ### Required OAuth Scopes
 
-- `ZohoProjects.portals.READ` - List portals
-- `ZohoProjects.projects.READ` - List projects
-- `ZohoProjects.tasks.READ` - List tasks and comments
-- `ZohoProjects.tasks.CREATE` - Add comments
-- `ZohoProjects.tasks.UPDATE` - Update comments
-- `ZohoProjects.tasks.DELETE` - Delete comments
+The following scopes are required for full functionality:
+
+| Scope | Purpose |
+|-------|---------|
+| `ZohoProjects.portals.READ` | List portals |
+| `ZohoProjects.projects.READ` | List projects |
+| `ZohoProjects.tasks.READ` | List tasks, task lists, comments, users |
+| `ZohoProjects.tasks.CREATE` | Create tasks, add comments |
+| `ZohoProjects.tasks.UPDATE` | Update tasks, assign users, add dependencies |
+| `ZohoProjects.tasks.DELETE` | Delete tasks and comments |
+| `ZohoProjects.tasklists.READ` | List task lists |
+| `ZohoProjects.tasklists.CREATE` | Create task lists |
+
+**Comma-separated list for easy copying:**
+
+```
+ZohoProjects.portals.READ,ZohoProjects.projects.READ,ZohoProjects.tasks.READ,ZohoProjects.tasks.CREATE,ZohoProjects.tasks.UPDATE,ZohoProjects.tasks.DELETE,ZohoProjects.tasklists.READ,ZohoProjects.tasklists.CREATE
+```
 
 ## Adding to Claude Code
 
 ```bash
-claude mcp add zoho-projects-v2 -- node /path/to/zoho-projects-v2-mcp/dist/index.js
+claude mcp add zoho-projects-v2 -s user -- node /path/to/zoho-projects-v2-mcp/dist/index.js
 ```
 
 With environment variables:
 
 ```bash
-claude mcp add zoho-projects-v2 \
+claude mcp add zoho-projects-v2 -s user \
   -e ZOHO_REFRESH_TOKEN=your_refresh_token \
   -e ZOHO_CLIENT_ID=your_client_id \
   -e ZOHO_CLIENT_SECRET=your_client_secret \
   -e ZOHO_DOMAIN=zoho.com \
+  -e ZOHO_USER_ID=your_user_id \
   -- node /path/to/zoho-projects-v2-mcp/dist/index.js
 ```
 
@@ -127,6 +145,27 @@ Parameters:
 - `status_id`: Task status ID (use `list_task_statuses` to discover valid values)
 - `percent_complete`: Completion percentage from 0 to 100
 
+#### `assign_task`
+Assign one or more users to a task. If `user_ids` is omitted, falls back to `ZOHO_USER_ID` environment variable.
+
+Parameters:
+- `portal_id` (required): The Zoho Projects portal ID
+- `project_id` (required): The project ID
+- `task_id` (required): The task ID to assign users to
+- `user_ids`: Array of user IDs to assign (optional if `ZOHO_USER_ID` is set)
+
+#### `add_task_dependency`
+Add a dependency between two tasks (predecessor/successor relationship).
+
+Parameters:
+- `portal_id` (required): The Zoho Projects portal ID
+- `project_id` (required): The project ID
+- `task_id` (required): The successor task ID (the task that depends on another)
+- `predecessor_id` (required): The predecessor task ID (the task that must complete first)
+- `dependency_type`: Type of dependency - `FS` (Finish-to-Start, default), `SS` (Start-to-Start), `SF` (Start-to-Finish), `FF` (Finish-to-Finish)
+- `lag_value`: Lag time between tasks
+- `lag_type`: Unit for lag time - `days` or `hours`
+
 ### Helper Tools
 
 #### `list_portals`
@@ -152,10 +191,68 @@ Parameters:
 
 ## Getting Zoho OAuth Credentials
 
+### Step 1: Create a Self Client
+
 1. Go to [Zoho API Console](https://api-console.zoho.com/)
-2. Create a new Self Client
-3. Generate tokens with the required scopes listed above
-4. Save your Client ID, Client Secret, and Refresh Token
+2. Click **Add Client** → **Self Client**
+3. Give it a name (e.g., "Zoho Projects MCP")
+4. Click **Create**
+5. Note your **Client ID** and **Client Secret**
+
+### Step 2: Generate an Authorization Code
+
+1. In the Self Client, go to the **Generate Code** tab
+2. Enter the scopes (comma-separated):
+   ```
+   ZohoProjects.portals.READ,ZohoProjects.projects.READ,ZohoProjects.tasks.READ,ZohoProjects.tasks.CREATE,ZohoProjects.tasks.UPDATE,ZohoProjects.tasks.DELETE,ZohoProjects.tasklists.READ,ZohoProjects.tasklists.CREATE
+   ```
+3. Set **Time Duration** to the maximum (10 minutes)
+4. Enter a **Scope Description** (e.g., "MCP Server Access")
+5. Click **Create**
+6. Copy the generated **authorization code** (it expires in 10 minutes!)
+
+### Step 3: Exchange the Code for a Refresh Token
+
+Run this curl command in your terminal, replacing the placeholders:
+
+```bash
+curl -X POST "https://accounts.zoho.com/oauth/v2/token" \
+  -d "grant_type=authorization_code" \
+  -d "client_id=YOUR_CLIENT_ID" \
+  -d "client_secret=YOUR_CLIENT_SECRET" \
+  -d "code=YOUR_AUTHORIZATION_CODE"
+```
+
+**For EU region**, use `https://accounts.zoho.eu/oauth/v2/token`
+**For IN region**, use `https://accounts.zoho.in/oauth/v2/token`
+
+The response will include:
+```json
+{
+  "access_token": "...",
+  "refresh_token": "...",
+  "expires_in": 3600,
+  "token_type": "Bearer"
+}
+```
+
+**Save the `refresh_token`** - this is what you need for the MCP server. The refresh token doesn't expire (unless revoked), so you only need to do this once.
+
+### Step 4: Configure the MCP Server
+
+Use the Client ID, Client Secret, and Refresh Token when adding the MCP server:
+
+```bash
+claude mcp add zoho-projects-v2 -s user \
+  -e ZOHO_REFRESH_TOKEN=your_refresh_token \
+  -e ZOHO_CLIENT_ID=your_client_id \
+  -e ZOHO_CLIENT_SECRET=your_client_secret \
+  -e ZOHO_DOMAIN=zoho.com \
+  -e ZOHO_USER_ID=your_user_id \
+  -- node /path/to/zoho-projects-v2-mcp/dist/index.js
+```
+
+To find your User ID, use `list_project_users` after setup, or check your Zoho profile.
 
 ## License
 

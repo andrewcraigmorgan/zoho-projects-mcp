@@ -14,6 +14,7 @@ const ZOHO_REFRESH_TOKEN = process.env.ZOHO_REFRESH_TOKEN;
 const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID;
 const ZOHO_CLIENT_SECRET = process.env.ZOHO_CLIENT_SECRET;
 const ZOHO_DOMAIN = process.env.ZOHO_DOMAIN || "zoho.com"; // zoho.com, zoho.eu, zoho.in, etc.
+const ZOHO_USER_ID = process.env.ZOHO_USER_ID; // Optional: default user ID for task assignment
 
 let accessToken = ZOHO_ACCESS_TOKEN;
 
@@ -825,6 +826,78 @@ const tools: Tool[] = [
       required: ["portal_id"],
     },
   },
+  {
+    name: "assign_task",
+    description:
+      "Assign one or more users to a task. If user_ids is omitted, uses ZOHO_USER_ID env variable. Requires ZohoProjects.tasks.UPDATE scope.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: {
+          type: "string",
+          description: "The Zoho Projects portal ID",
+        },
+        project_id: {
+          type: "string",
+          description: "The project ID containing the task",
+        },
+        task_id: {
+          type: "string",
+          description: "The task ID to assign users to",
+        },
+        user_ids: {
+          type: "array",
+          description:
+            "Array of user IDs to assign to the task. If omitted, uses ZOHO_USER_ID env variable.",
+          items: { type: "string" },
+        },
+      },
+      required: ["portal_id", "project_id", "task_id"],
+    },
+  },
+  {
+    name: "add_task_dependency",
+    description:
+      "Add a dependency between two tasks (predecessor/successor relationship). Requires ZohoProjects.tasks.UPDATE scope.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: {
+          type: "string",
+          description: "The Zoho Projects portal ID",
+        },
+        project_id: {
+          type: "string",
+          description: "The project ID containing the tasks",
+        },
+        task_id: {
+          type: "string",
+          description: "The task ID that will have the dependency (successor task)",
+        },
+        predecessor_id: {
+          type: "string",
+          description: "The task ID of the predecessor task",
+        },
+        dependency_type: {
+          type: "string",
+          description:
+            "Type of dependency: FS (Finish-to-Start), SS (Start-to-Start), SF (Start-to-Finish), FF (Finish-to-Finish). Default: FS",
+          enum: ["FS", "SS", "SF", "FF"],
+          default: "FS",
+        },
+        lag_value: {
+          type: "number",
+          description: "Lag time between tasks (optional)",
+        },
+        lag_type: {
+          type: "string",
+          description: "Unit for lag time: days or hours",
+          enum: ["days", "hours"],
+        },
+      },
+      required: ["portal_id", "project_id", "task_id", "predecessor_id"],
+    },
+  },
 ];
 
 // Tool handlers
@@ -1144,6 +1217,71 @@ async function handleGetMyTasks(args: {
   return slimMyTasksResponse(result, !(args.raw ?? false));
 }
 
+async function handleAssignTask(args: {
+  portal_id: string;
+  project_id: string;
+  task_id: string;
+  user_ids?: string[];
+}): Promise<unknown> {
+  let userIds = args.user_ids;
+
+  // Fall back to ZOHO_USER_ID env variable if no user_ids provided
+  if (!userIds || userIds.length === 0) {
+    if (!ZOHO_USER_ID) {
+      throw new Error(
+        "No user_ids provided and ZOHO_USER_ID environment variable is not set"
+      );
+    }
+    userIds = [ZOHO_USER_ID];
+  }
+
+  const body = new URLSearchParams();
+  body.set("person_responsible", userIds.join(","));
+
+  return zohoRequest(
+    `/portal/${args.portal_id}/projects/${args.project_id}/tasks/${args.task_id}/`,
+    {
+      method: "POST",
+      body: body.toString(),
+    }
+  );
+}
+
+async function handleAddTaskDependency(args: {
+  portal_id: string;
+  project_id: string;
+  task_id: string;
+  predecessor_id: string;
+  dependency_type?: string;
+  lag_value?: number;
+  lag_type?: string;
+}): Promise<unknown> {
+  const body = new URLSearchParams();
+  body.set("taskid", args.task_id);
+  body.set("projId", args.project_id);
+  body.set("toupdate", "dependencyset");
+  body.set("predids", args.predecessor_id);
+  body.set("childprojId", args.project_id); // Required by API
+
+  if (args.dependency_type) {
+    body.set("dependencytype", args.dependency_type);
+  }
+  if (args.lag_value !== undefined) {
+    body.set("gapvalue", String(args.lag_value));
+  }
+  if (args.lag_type) {
+    body.set("gaptype", args.lag_type);
+  }
+
+  return zohoRequest(
+    `/portal/${args.portal_id}/projects/${args.project_id}/taskdependency/`,
+    {
+      method: "POST",
+      body: body.toString(),
+    }
+  );
+}
+
 // Create and configure the MCP server
 const server = new Server(
   {
@@ -1255,6 +1393,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "get_my_tasks":
         result = await handleGetMyTasks(
           args as Parameters<typeof handleGetMyTasks>[0]
+        );
+        break;
+      case "assign_task":
+        result = await handleAssignTask(
+          args as Parameters<typeof handleAssignTask>[0]
+        );
+        break;
+      case "add_task_dependency":
+        result = await handleAddTaskDependency(
+          args as Parameters<typeof handleAddTaskDependency>[0]
         );
         break;
       default:
