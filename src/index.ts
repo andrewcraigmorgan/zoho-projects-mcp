@@ -39,6 +39,140 @@ const FALLBACK_TASK_STATUSES = [
   { id: "1013893000016215201", name: "Awaiting Approval" },
 ] as const;
 
+// Note: Status extraction functions were removed as we're using fallback statuses directly.
+// May be revisited in the future when API strategies are confirmed working.
+
+// Slim response transformers - reduce context usage by returning only essential fields
+function slimPortalResponse(raw: unknown, slim: boolean): unknown {
+  if (!slim) return raw;
+  const data = raw as { portals?: Array<Record<string, unknown>> };
+  return {
+    portals:
+      data.portals?.map((p) => ({
+        id: p.id,
+        name: p.name,
+        is_default: p.is_default,
+      })) || [],
+  };
+}
+
+function slimProjectResponse(raw: unknown, slim: boolean): unknown {
+  if (!slim) return raw;
+  const data = raw as { projects?: Array<Record<string, unknown>> };
+  return {
+    projects:
+      data.projects?.map((p) => ({
+        id: p.id,
+        name: p.name,
+        status: p.status,
+        owner_name: p.owner_name,
+        open_task_count: (p.task_count as Record<string, unknown>)?.open,
+      })) || [],
+    has_more: !!data.projects?.length,
+  };
+}
+
+function slimTaskResponse(raw: unknown, slim: boolean): unknown {
+  if (!slim) return raw;
+  const data = raw as { tasks?: Array<Record<string, unknown>> };
+  return {
+    tasks:
+      data.tasks?.map((t) => ({
+        id: t.id,
+        name: t.name,
+        status: t.status,
+        priority: t.priority,
+        percent_complete: t.percent_complete,
+        start_date: t.start_date,
+        end_date: t.end_date,
+        owner_name: (t.details as Record<string, unknown>)?.owners
+          ? ((t.details as Record<string, unknown>).owners as Array<Record<string, unknown>>)?.[0]?.name
+          : undefined,
+      })) || [],
+    has_more: !!data.tasks?.length,
+  };
+}
+
+function slimSingleTaskResponse(raw: unknown, slim: boolean): unknown {
+  if (!slim) return raw;
+  const data = raw as { tasks?: Array<Record<string, unknown>> };
+  const t = data.tasks?.[0];
+  if (!t) return raw;
+  return {
+    task: {
+      id: t.id,
+      name: t.name,
+      description: (t.details as Record<string, unknown>)?.description,
+      status: t.status,
+      priority: t.priority,
+      percent_complete: t.percent_complete,
+      start_date: t.start_date,
+      end_date: t.end_date,
+      tasklist: t.tasklist,
+      owners: (t.details as Record<string, unknown>)?.owners,
+    },
+  };
+}
+
+function slimCommentResponse(raw: unknown, slim: boolean): unknown {
+  if (!slim) return raw;
+  const data = raw as { comments?: Array<Record<string, unknown>> };
+  return {
+    comments:
+      data.comments?.map((c) => ({
+        id: c.id,
+        content: c.content,
+        author: (c.added_by as Record<string, unknown>)?.name,
+        created_time: c.created_time,
+      })) || [],
+    has_more: !!data.comments?.length,
+  };
+}
+
+function slimTasklistResponse(raw: unknown, slim: boolean): unknown {
+  if (!slim) return raw;
+  const data = raw as { tasklists?: Array<Record<string, unknown>> };
+  return {
+    tasklists:
+      data.tasklists?.map((tl) => ({
+        id: tl.id,
+        name: tl.name,
+        milestone_id: (tl.milestone as Record<string, unknown>)?.id,
+      })) || [],
+  };
+}
+
+function slimUserResponse(raw: unknown, slim: boolean): unknown {
+  if (!slim) return raw;
+  const data = raw as { users?: Array<Record<string, unknown>> };
+  return {
+    users:
+      data.users?.map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+      })) || [],
+  };
+}
+
+function slimMyTasksResponse(raw: unknown, slim: boolean): unknown {
+  if (!slim) return raw;
+  const data = raw as { tasks?: Array<Record<string, unknown>> };
+  return {
+    tasks:
+      data.tasks?.map((t) => ({
+        id: t.id,
+        name: t.name,
+        project_name: (t.project as Record<string, unknown>)?.name,
+        status: t.status,
+        priority: t.priority,
+        end_date: t.end_date,
+      })) || [],
+    has_more: !!data.tasks?.length,
+  };
+}
+
 // Refresh access token using refresh token
 async function refreshAccessToken(): Promise<string> {
   if (!ZOHO_REFRESH_TOKEN || !ZOHO_CLIENT_ID || !ZOHO_CLIENT_SECRET) {
@@ -188,6 +322,12 @@ const tools: Tool[] = [
           enum: ["ascending", "descending"],
           default: "descending",
         },
+        raw: {
+          type: "boolean",
+          description:
+            "Return full API response instead of slim response (default: false)",
+          default: false,
+        },
       },
       required: ["portal_id", "project_id", "task_id"],
     },
@@ -283,7 +423,14 @@ const tools: Tool[] = [
       "List all Zoho Projects portals accessible with the current credentials. Useful for getting portal IDs.",
     inputSchema: {
       type: "object",
-      properties: {},
+      properties: {
+        raw: {
+          type: "boolean",
+          description:
+            "Return full API response instead of slim response (default: false)",
+          default: false,
+        },
+      },
       required: [],
     },
   },
@@ -313,6 +460,12 @@ const tools: Tool[] = [
           description: "Filter by project status",
           enum: ["active", "archived", "template"],
         },
+        raw: {
+          type: "boolean",
+          description:
+            "Return full API response instead of slim response (default: false)",
+          default: false,
+        },
       },
       required: ["portal_id"],
     },
@@ -341,6 +494,12 @@ const tools: Tool[] = [
           type: "number",
           description: "Number of tasks to retrieve (default: 100)",
           default: 100,
+        },
+        raw: {
+          type: "boolean",
+          description:
+            "Return full API response instead of slim response (default: false)",
+          default: false,
         },
       },
       required: ["portal_id", "project_id"],
@@ -404,6 +563,268 @@ const tools: Tool[] = [
       required: ["portal_id", "project_id", "task_id"],
     },
   },
+  // Task CRUD tools
+  {
+    name: "get_task",
+    description: "Get details of a specific task by ID.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: {
+          type: "string",
+          description: "The Zoho Projects portal ID",
+        },
+        project_id: {
+          type: "string",
+          description: "The project ID containing the task",
+        },
+        task_id: {
+          type: "string",
+          description: "The task ID to retrieve",
+        },
+        raw: {
+          type: "boolean",
+          description:
+            "Return full API response instead of slim response (default: false)",
+          default: false,
+        },
+      },
+      required: ["portal_id", "project_id", "task_id"],
+    },
+  },
+  {
+    name: "create_task",
+    description:
+      "Create a new task in a project. Requires ZohoProjects.tasks.CREATE scope.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: {
+          type: "string",
+          description: "The Zoho Projects portal ID",
+        },
+        project_id: {
+          type: "string",
+          description: "The project ID to create the task in",
+        },
+        name: {
+          type: "string",
+          description: "Task name",
+        },
+        tasklist_id: {
+          type: "string",
+          description:
+            "Task list ID to add task to (use list_tasklists to get IDs)",
+        },
+        description: {
+          type: "string",
+          description: "Task description",
+        },
+        start_date: {
+          type: "string",
+          description: "Start date in MM-DD-YYYY format",
+        },
+        end_date: {
+          type: "string",
+          description: "End date in MM-DD-YYYY format",
+        },
+        priority: {
+          type: "string",
+          description: "Task priority",
+          enum: ["none", "low", "medium", "high"],
+        },
+        owner_ids: {
+          type: "array",
+          description:
+            "Array of user IDs to assign (use list_project_users to get IDs)",
+          items: { type: "string" },
+        },
+      },
+      required: ["portal_id", "project_id", "name"],
+    },
+  },
+  {
+    name: "update_task",
+    description:
+      "Update task properties (name, description, dates, priority). Requires ZohoProjects.tasks.UPDATE scope.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: {
+          type: "string",
+          description: "The Zoho Projects portal ID",
+        },
+        project_id: {
+          type: "string",
+          description: "The project ID containing the task",
+        },
+        task_id: {
+          type: "string",
+          description: "The task ID to update",
+        },
+        name: {
+          type: "string",
+          description: "New task name",
+        },
+        description: {
+          type: "string",
+          description: "New task description",
+        },
+        start_date: {
+          type: "string",
+          description: "Start date in MM-DD-YYYY format",
+        },
+        end_date: {
+          type: "string",
+          description: "End date in MM-DD-YYYY format",
+        },
+        priority: {
+          type: "string",
+          description: "Task priority",
+          enum: ["none", "low", "medium", "high"],
+        },
+        percent_complete: {
+          type: "number",
+          description: "Completion percentage from 0 to 100",
+          minimum: 0,
+          maximum: 100,
+        },
+      },
+      required: ["portal_id", "project_id", "task_id"],
+    },
+  },
+  {
+    name: "delete_task",
+    description:
+      "Delete a task. Requires ZohoProjects.tasks.DELETE scope.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: {
+          type: "string",
+          description: "The Zoho Projects portal ID",
+        },
+        project_id: {
+          type: "string",
+          description: "The project ID containing the task",
+        },
+        task_id: {
+          type: "string",
+          description: "The task ID to delete",
+        },
+      },
+      required: ["portal_id", "project_id", "task_id"],
+    },
+  },
+  // Task List tools
+  {
+    name: "list_tasklists",
+    description: "List all task lists (folders) in a project.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: {
+          type: "string",
+          description: "The Zoho Projects portal ID",
+        },
+        project_id: {
+          type: "string",
+          description: "The project ID to list task lists from",
+        },
+        raw: {
+          type: "boolean",
+          description:
+            "Return full API response instead of slim response (default: false)",
+          default: false,
+        },
+      },
+      required: ["portal_id", "project_id"],
+    },
+  },
+  {
+    name: "create_tasklist",
+    description:
+      "Create a new task list in a project. Requires ZohoProjects.tasklists.CREATE scope.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: {
+          type: "string",
+          description: "The Zoho Projects portal ID",
+        },
+        project_id: {
+          type: "string",
+          description: "The project ID to create the task list in",
+        },
+        name: {
+          type: "string",
+          description: "Task list name",
+        },
+        milestone_id: {
+          type: "string",
+          description: "Optional milestone ID to associate with the task list",
+        },
+      },
+      required: ["portal_id", "project_id", "name"],
+    },
+  },
+  // User tools
+  {
+    name: "list_project_users",
+    description:
+      "List all users in a project who can be assigned to tasks.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: {
+          type: "string",
+          description: "The Zoho Projects portal ID",
+        },
+        project_id: {
+          type: "string",
+          description: "The project ID to list users from",
+        },
+        raw: {
+          type: "boolean",
+          description:
+            "Return full API response instead of slim response (default: false)",
+          default: false,
+        },
+      },
+      required: ["portal_id", "project_id"],
+    },
+  },
+  {
+    name: "get_my_tasks",
+    description:
+      "Get tasks assigned to the current authenticated user across all projects.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: {
+          type: "string",
+          description: "The Zoho Projects portal ID",
+        },
+        index: {
+          type: "number",
+          description: "Starting index for pagination (default: 0)",
+          default: 0,
+        },
+        range: {
+          type: "number",
+          description: "Number of tasks to retrieve (default: 100)",
+          default: 100,
+        },
+        raw: {
+          type: "boolean",
+          description:
+            "Return full API response instead of slim response (default: false)",
+          default: false,
+        },
+      },
+      required: ["portal_id"],
+    },
+  },
 ];
 
 // Tool handlers
@@ -415,6 +836,7 @@ async function handleListTaskComments(args: {
   range?: number;
   sort_column?: string;
   sort_order?: string;
+  raw?: boolean;
 }): Promise<unknown> {
   const params = new URLSearchParams();
   params.set("index", String(args.index ?? 0));
@@ -422,9 +844,10 @@ async function handleListTaskComments(args: {
   if (args.sort_column) params.set("sort_column", args.sort_column);
   if (args.sort_order) params.set("sort_order", args.sort_order);
 
-  return zohoRequest(
+  const result = await zohoRequest(
     `/portal/${args.portal_id}/projects/${args.project_id}/tasks/${args.task_id}/comments/?${params.toString()}`
   );
+  return slimCommentResponse(result, !(args.raw ?? false));
 }
 
 async function handleAddTaskComment(args: {
@@ -478,8 +901,9 @@ async function handleDeleteTaskComment(args: {
   );
 }
 
-async function handleListPortals(): Promise<unknown> {
-  return zohoRequest("/portals/");
+async function handleListPortals(args: { raw?: boolean }): Promise<unknown> {
+  const result = await zohoRequest("/portals/");
+  return slimPortalResponse(result, !(args.raw ?? false));
 }
 
 async function handleListProjects(args: {
@@ -487,15 +911,17 @@ async function handleListProjects(args: {
   index?: number;
   range?: number;
   status?: string;
+  raw?: boolean;
 }): Promise<unknown> {
   const params = new URLSearchParams();
   params.set("index", String(args.index ?? 0));
   params.set("range", String(args.range ?? 100));
   if (args.status) params.set("status", args.status);
 
-  return zohoRequest(
+  const result = await zohoRequest(
     `/portal/${args.portal_id}/projects/?${params.toString()}`
   );
+  return slimProjectResponse(result, !(args.raw ?? false));
 }
 
 async function handleListTasks(args: {
@@ -503,38 +929,27 @@ async function handleListTasks(args: {
   project_id: string;
   index?: number;
   range?: number;
+  raw?: boolean;
 }): Promise<unknown> {
   const params = new URLSearchParams();
   params.set("index", String(args.index ?? 0));
   params.set("range", String(args.range ?? 100));
 
-  return zohoRequest(
+  const result = await zohoRequest(
     `/portal/${args.portal_id}/projects/${args.project_id}/tasks/?${params.toString()}`
   );
+  return slimTaskResponse(result, !(args.raw ?? false));
 }
 
-async function handleListTaskStatuses(args: {
+async function handleListTaskStatuses(_args: {
   portal_id: string;
   project_id: string;
 }): Promise<unknown> {
-  try {
-    const result = await zohoRequest(
-      `/portal/${args.portal_id}/projects/${args.project_id}/taskstatuses/`
-    );
-
-    return {
-      source: "api",
-      data: result,
-      fallback_statuses: FALLBACK_TASK_STATUSES,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return {
-      source: "fallback",
-      error: message,
-      statuses: FALLBACK_TASK_STATUSES,
-    };
-  }
+  // Using fallback statuses directly - API strategies may be revisited in the future
+  return {
+    source: "fallback",
+    statuses: FALLBACK_TASK_STATUSES,
+  };
 }
 
 async function handleUpdateTaskStatus(args: {
@@ -583,6 +998,152 @@ async function handleUpdateTaskStatus(args: {
   );
 }
 
+// Task CRUD handlers
+async function handleGetTask(args: {
+  portal_id: string;
+  project_id: string;
+  task_id: string;
+  raw?: boolean;
+}): Promise<unknown> {
+  const result = await zohoRequest(
+    `/portal/${args.portal_id}/projects/${args.project_id}/tasks/${args.task_id}/`
+  );
+  return slimSingleTaskResponse(result, !(args.raw ?? false));
+}
+
+async function handleCreateTask(args: {
+  portal_id: string;
+  project_id: string;
+  name: string;
+  tasklist_id?: string;
+  description?: string;
+  start_date?: string;
+  end_date?: string;
+  priority?: string;
+  owner_ids?: string[];
+}): Promise<unknown> {
+  const body = new URLSearchParams();
+  body.set("name", args.name);
+  if (args.tasklist_id) body.set("tasklist_id", args.tasklist_id);
+  if (args.description) body.set("description", args.description);
+  if (args.start_date) body.set("start_date", args.start_date);
+  if (args.end_date) body.set("end_date", args.end_date);
+  if (args.priority) body.set("priority", args.priority);
+  if (args.owner_ids && args.owner_ids.length > 0) {
+    body.set("person_responsible", args.owner_ids.join(","));
+  }
+
+  return zohoRequest(
+    `/portal/${args.portal_id}/projects/${args.project_id}/tasks/`,
+    {
+      method: "POST",
+      body: body.toString(),
+    }
+  );
+}
+
+async function handleUpdateTask(args: {
+  portal_id: string;
+  project_id: string;
+  task_id: string;
+  name?: string;
+  description?: string;
+  start_date?: string;
+  end_date?: string;
+  priority?: string;
+  percent_complete?: number;
+}): Promise<unknown> {
+  const body = new URLSearchParams();
+  if (args.name) body.set("name", args.name);
+  if (args.description) body.set("description", args.description);
+  if (args.start_date) body.set("start_date", args.start_date);
+  if (args.end_date) body.set("end_date", args.end_date);
+  if (args.priority) body.set("priority", args.priority);
+  if (args.percent_complete !== undefined) {
+    body.set("percent_complete", String(args.percent_complete));
+  }
+
+  return zohoRequest(
+    `/portal/${args.portal_id}/projects/${args.project_id}/tasks/${args.task_id}/`,
+    {
+      method: "POST",
+      body: body.toString(),
+    }
+  );
+}
+
+async function handleDeleteTask(args: {
+  portal_id: string;
+  project_id: string;
+  task_id: string;
+}): Promise<unknown> {
+  return zohoRequest(
+    `/portal/${args.portal_id}/projects/${args.project_id}/tasks/${args.task_id}/`,
+    {
+      method: "DELETE",
+    }
+  );
+}
+
+// Task List handlers
+async function handleListTasklists(args: {
+  portal_id: string;
+  project_id: string;
+  raw?: boolean;
+}): Promise<unknown> {
+  const result = await zohoRequest(
+    `/portal/${args.portal_id}/projects/${args.project_id}/tasklists/`
+  );
+  return slimTasklistResponse(result, !(args.raw ?? false));
+}
+
+async function handleCreateTasklist(args: {
+  portal_id: string;
+  project_id: string;
+  name: string;
+  milestone_id?: string;
+}): Promise<unknown> {
+  const body = new URLSearchParams();
+  body.set("name", args.name);
+  if (args.milestone_id) body.set("milestone_id", args.milestone_id);
+
+  return zohoRequest(
+    `/portal/${args.portal_id}/projects/${args.project_id}/tasklists/`,
+    {
+      method: "POST",
+      body: body.toString(),
+    }
+  );
+}
+
+// User handlers
+async function handleListProjectUsers(args: {
+  portal_id: string;
+  project_id: string;
+  raw?: boolean;
+}): Promise<unknown> {
+  const result = await zohoRequest(
+    `/portal/${args.portal_id}/projects/${args.project_id}/users/`
+  );
+  return slimUserResponse(result, !(args.raw ?? false));
+}
+
+async function handleGetMyTasks(args: {
+  portal_id: string;
+  index?: number;
+  range?: number;
+  raw?: boolean;
+}): Promise<unknown> {
+  const params = new URLSearchParams();
+  params.set("index", String(args.index ?? 0));
+  params.set("range", String(args.range ?? 100));
+
+  const result = await zohoRequest(
+    `/portal/${args.portal_id}/mytasks/?${params.toString()}`
+  );
+  return slimMyTasksResponse(result, !(args.raw ?? false));
+}
+
 // Create and configure the MCP server
 const server = new Server(
   {
@@ -629,7 +1190,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
         break;
       case "list_portals":
-        result = await handleListPortals();
+        result = await handleListPortals(
+          args as Parameters<typeof handleListPortals>[0]
+        );
         break;
       case "list_projects":
         result = await handleListProjects(
@@ -649,6 +1212,49 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "update_task_status":
         result = await handleUpdateTaskStatus(
           args as Parameters<typeof handleUpdateTaskStatus>[0]
+        );
+        break;
+      // Task CRUD tools
+      case "get_task":
+        result = await handleGetTask(
+          args as Parameters<typeof handleGetTask>[0]
+        );
+        break;
+      case "create_task":
+        result = await handleCreateTask(
+          args as Parameters<typeof handleCreateTask>[0]
+        );
+        break;
+      case "update_task":
+        result = await handleUpdateTask(
+          args as Parameters<typeof handleUpdateTask>[0]
+        );
+        break;
+      case "delete_task":
+        result = await handleDeleteTask(
+          args as Parameters<typeof handleDeleteTask>[0]
+        );
+        break;
+      // Task List tools
+      case "list_tasklists":
+        result = await handleListTasklists(
+          args as Parameters<typeof handleListTasklists>[0]
+        );
+        break;
+      case "create_tasklist":
+        result = await handleCreateTasklist(
+          args as Parameters<typeof handleCreateTasklist>[0]
+        );
+        break;
+      // User tools
+      case "list_project_users":
+        result = await handleListProjectUsers(
+          args as Parameters<typeof handleListProjectUsers>[0]
+        );
+        break;
+      case "get_my_tasks":
+        result = await handleGetMyTasks(
+          args as Parameters<typeof handleGetMyTasks>[0]
         );
         break;
       default:
