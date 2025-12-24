@@ -281,660 +281,300 @@ async function zohoRequestV3(
   return response.json();
 }
 
-// Tool definitions
+// Tool definitions - descriptions minimized to reduce context overhead
 const tools: Tool[] = [
   {
     name: "list_task_comments",
-    description:
-      "Get all comments for a specific task in Zoho Projects. Returns comments with author, content, and timestamps.",
+    description: "Get task comments.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID containing the task",
-        },
-        task_id: {
-          type: "string",
-          description: "The task ID to get comments for",
-        },
-        index: {
-          type: "number",
-          description: "Starting index for pagination (default: 0)",
-          default: 0,
-        },
-        range: {
-          type: "number",
-          description: "Number of comments to retrieve (default: 100)",
-          default: 100,
-        },
-        sort_column: {
-          type: "string",
-          description: "Sort by 'created_time' or 'last_modified_time'",
-          enum: ["created_time", "last_modified_time"],
-          default: "created_time",
-        },
-        sort_order: {
-          type: "string",
-          description: "Sort order: 'ascending' or 'descending'",
-          enum: ["ascending", "descending"],
-          default: "descending",
-        },
-        raw: {
-          type: "boolean",
-          description:
-            "Return full API response instead of slim response (default: false)",
-          default: false,
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        task_id: { type: "string", description: "Task ID" },
+        index: { type: "number", description: "Pagination start index", default: 0 },
+        range: { type: "number", description: "Items to retrieve", default: 100 },
+        sort_column: { type: "string", enum: ["created_time", "last_modified_time"], default: "created_time" },
+        sort_order: { type: "string", enum: ["ascending", "descending"], default: "descending" },
+        raw: { type: "boolean", description: "Return full API response", default: false },
       },
       required: ["portal_id", "project_id", "task_id"],
     },
   },
   {
     name: "add_task_comment",
-    description:
-      "Add a new comment to a task in Zoho Projects. Requires ZohoProjects.tasks.CREATE scope.",
+    description: "Add comment to task.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID containing the task",
-        },
-        task_id: {
-          type: "string",
-          description: "The task ID to add a comment to",
-        },
-        content: {
-          type: "string",
-          description: "The comment text content",
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        task_id: { type: "string", description: "Task ID" },
+        content: { type: "string", description: "Comment content" },
       },
       required: ["portal_id", "project_id", "task_id", "content"],
     },
   },
   {
     name: "update_task_comment",
-    description:
-      "Update an existing comment on a task in Zoho Projects. Requires ZohoProjects.tasks.UPDATE scope.",
+    description: "Update task comment.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID containing the task",
-        },
-        task_id: {
-          type: "string",
-          description: "The task ID containing the comment",
-        },
-        comment_id: {
-          type: "string",
-          description: "The comment ID to update",
-        },
-        content: {
-          type: "string",
-          description: "The new comment text content",
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        task_id: { type: "string", description: "Task ID" },
+        comment_id: { type: "string", description: "Comment ID" },
+        content: { type: "string", description: "New content" },
       },
       required: ["portal_id", "project_id", "task_id", "comment_id", "content"],
     },
   },
   {
     name: "delete_task_comment",
-    description:
-      "Delete a comment from a task in Zoho Projects. Requires ZohoProjects.tasks.DELETE scope.",
+    description: "Delete task comment.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID containing the task",
-        },
-        task_id: {
-          type: "string",
-          description: "The task ID containing the comment",
-        },
-        comment_id: {
-          type: "string",
-          description: "The comment ID to delete",
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        task_id: { type: "string", description: "Task ID" },
+        comment_id: { type: "string", description: "Comment ID" },
       },
       required: ["portal_id", "project_id", "task_id", "comment_id"],
     },
   },
   {
     name: "list_portals",
-    description:
-      "List all Zoho Projects portals accessible with the current credentials. Useful for getting portal IDs.",
+    description: "List accessible portals.",
     inputSchema: {
       type: "object",
       properties: {
-        raw: {
-          type: "boolean",
-          description:
-            "Return full API response instead of slim response (default: false)",
-          default: false,
-        },
+        raw: { type: "boolean", description: "Return full API response", default: false },
       },
       required: [],
     },
   },
   {
     name: "list_projects",
-    description:
-      "List all projects in a Zoho Projects portal. Useful for getting project IDs.",
+    description: "List projects in portal.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        index: {
-          type: "number",
-          description: "Starting index for pagination (default: 0)",
-          default: 0,
-        },
-        range: {
-          type: "number",
-          description: "Number of projects to retrieve (default: 100)",
-          default: 100,
-        },
-        status: {
-          type: "string",
-          description: "Filter by project status",
-          enum: ["active", "archived", "template"],
-        },
-        raw: {
-          type: "boolean",
-          description:
-            "Return full API response instead of slim response (default: false)",
-          default: false,
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        index: { type: "number", description: "Pagination start index", default: 0 },
+        range: { type: "number", description: "Items to retrieve", default: 100 },
+        status: { type: "string", enum: ["active", "archived", "template"] },
+        raw: { type: "boolean", description: "Return full API response", default: false },
       },
       required: ["portal_id"],
     },
   },
   {
     name: "list_tasks",
-    description:
-      "List all tasks in a Zoho Projects project. Useful for getting task IDs.",
+    description: "List tasks in project.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID to list tasks from",
-        },
-        index: {
-          type: "number",
-          description: "Starting index for pagination (default: 0)",
-          default: 0,
-        },
-        range: {
-          type: "number",
-          description: "Number of tasks to retrieve (default: 100)",
-          default: 100,
-        },
-        raw: {
-          type: "boolean",
-          description:
-            "Return full API response instead of slim response (default: false)",
-          default: false,
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        index: { type: "number", description: "Pagination start index", default: 0 },
+        range: { type: "number", description: "Items to retrieve", default: 100 },
+        raw: { type: "boolean", description: "Return full API response", default: false },
       },
       required: ["portal_id", "project_id"],
     },
   },
   {
     name: "list_task_statuses",
-    description:
-      "List all available task statuses for a project. Falls back to a known set when the API call fails.",
+    description: "List available task statuses.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID to list task statuses from",
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
       },
       required: ["portal_id", "project_id"],
     },
   },
   {
     name: "update_task_status",
-    description:
-      "Update a task's status and/or completion percentage. Requires ZohoProjects.tasks.UPDATE scope.",
+    description: "Update task status or completion %.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID containing the task",
-        },
-        task_id: {
-          type: "string",
-          description: "The task ID to update",
-        },
-        status: {
-          type: "string",
-          description:
-            "New task status (must match a valid Zoho Projects task status)",
-        },
-        status_id: {
-          type: "string",
-          description:
-            "Task status ID (use list_task_statuses to discover valid values)",
-        },
-        percent_complete: {
-          type: "number",
-          description: "Completion percentage from 0 to 100",
-          minimum: 0,
-          maximum: 100,
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        task_id: { type: "string", description: "Task ID" },
+        status: { type: "string", description: "Status name" },
+        status_id: { type: "string", description: "Status ID" },
+        percent_complete: { type: "number", minimum: 0, maximum: 100 },
       },
       required: ["portal_id", "project_id", "task_id"],
     },
   },
-  // Task CRUD tools
   {
     name: "get_task",
-    description: "Get details of a specific task by ID.",
+    description: "Get task details.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID containing the task",
-        },
-        task_id: {
-          type: "string",
-          description: "The task ID to retrieve",
-        },
-        raw: {
-          type: "boolean",
-          description:
-            "Return full API response instead of slim response (default: false)",
-          default: false,
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        task_id: { type: "string", description: "Task ID" },
+        raw: { type: "boolean", description: "Return full API response", default: false },
       },
       required: ["portal_id", "project_id", "task_id"],
     },
   },
   {
     name: "create_task",
-    description:
-      "Create a new task in a project. Requires ZohoProjects.tasks.CREATE scope.",
+    description: "Create task.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID to create the task in",
-        },
-        name: {
-          type: "string",
-          description: "Task name",
-        },
-        tasklist_id: {
-          type: "string",
-          description:
-            "Task list ID to add task to (use list_tasklists to get IDs)",
-        },
-        description: {
-          type: "string",
-          description: "Task description",
-        },
-        start_date: {
-          type: "string",
-          description: "Start date in MM-DD-YYYY format",
-        },
-        end_date: {
-          type: "string",
-          description: "End date in MM-DD-YYYY format",
-        },
-        priority: {
-          type: "string",
-          description: "Task priority",
-          enum: ["None", "Low", "Medium", "High"],
-        },
-        owner_ids: {
-          type: "array",
-          description:
-            "Array of user IDs to assign (use list_project_users to get IDs)",
-          items: { type: "string" },
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        name: { type: "string", description: "Task name" },
+        tasklist_id: { type: "string", description: "Tasklist ID" },
+        description: { type: "string" },
+        start_date: { type: "string", description: "MM-DD-YYYY" },
+        end_date: { type: "string", description: "MM-DD-YYYY" },
+        priority: { type: "string", enum: ["None", "Low", "Medium", "High"] },
+        owner_ids: { type: "array", description: "User IDs to assign", items: { type: "string" } },
       },
       required: ["portal_id", "project_id", "name"],
     },
   },
   {
     name: "update_task",
-    description:
-      "Update task properties (name, description, dates, priority). Requires ZohoProjects.tasks.UPDATE scope.",
+    description: "Update task properties.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID containing the task",
-        },
-        task_id: {
-          type: "string",
-          description: "The task ID to update",
-        },
-        name: {
-          type: "string",
-          description: "New task name",
-        },
-        description: {
-          type: "string",
-          description: "New task description",
-        },
-        start_date: {
-          type: "string",
-          description: "Start date in MM-DD-YYYY format",
-        },
-        end_date: {
-          type: "string",
-          description: "End date in MM-DD-YYYY format",
-        },
-        priority: {
-          type: "string",
-          description: "Task priority",
-          enum: ["None", "Low", "Medium", "High"],
-        },
-        percent_complete: {
-          type: "number",
-          description: "Completion percentage from 0 to 100",
-          minimum: 0,
-          maximum: 100,
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        task_id: { type: "string", description: "Task ID" },
+        name: { type: "string" },
+        description: { type: "string" },
+        start_date: { type: "string", description: "MM-DD-YYYY" },
+        end_date: { type: "string", description: "MM-DD-YYYY" },
+        priority: { type: "string", enum: ["None", "Low", "Medium", "High"] },
+        percent_complete: { type: "number", minimum: 0, maximum: 100 },
       },
       required: ["portal_id", "project_id", "task_id"],
     },
   },
   {
     name: "delete_task",
-    description:
-      "Delete a task. Requires ZohoProjects.tasks.DELETE scope.",
+    description: "Delete task.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID containing the task",
-        },
-        task_id: {
-          type: "string",
-          description: "The task ID to delete",
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        task_id: { type: "string", description: "Task ID" },
       },
       required: ["portal_id", "project_id", "task_id"],
     },
   },
-  // Task List tools
   {
     name: "list_tasklists",
-    description: "List all task lists (folders) in a project.",
+    description: "List task lists in project.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID to list task lists from",
-        },
-        raw: {
-          type: "boolean",
-          description:
-            "Return full API response instead of slim response (default: false)",
-          default: false,
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        raw: { type: "boolean", description: "Return full API response", default: false },
       },
       required: ["portal_id", "project_id"],
     },
   },
   {
     name: "create_tasklist",
-    description:
-      "Create a new task list in a project. Requires ZohoProjects.tasklists.CREATE scope.",
+    description: "Create task list.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID to create the task list in",
-        },
-        name: {
-          type: "string",
-          description: "Task list name",
-        },
-        milestone_id: {
-          type: "string",
-          description: "Optional milestone ID to associate with the task list",
-        },
-        visibility: {
-          type: "string",
-          description:
-            "Visibility of the task list: 'external' (visible to clients) or 'internal' (team only). Defaults to 'external'.",
-          enum: ["external", "internal"],
-          default: "external",
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        name: { type: "string", description: "Tasklist name" },
+        milestone_id: { type: "string" },
+        visibility: { type: "string", enum: ["external", "internal"], default: "external" },
       },
       required: ["portal_id", "project_id", "name"],
     },
   },
   {
     name: "update_tasklist",
-    description:
-      "Update a task list in a project. Requires ZohoProjects.tasklists.UPDATE scope.",
+    description: "Update task list.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID containing the task list",
-        },
-        tasklist_id: {
-          type: "string",
-          description: "The task list ID to update",
-        },
-        name: {
-          type: "string",
-          description: "New task list name",
-        },
-        visibility: {
-          type: "string",
-          description:
-            "Visibility of the task list: 'external' (visible to clients) or 'internal' (team only)",
-          enum: ["external", "internal"],
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        tasklist_id: { type: "string", description: "Tasklist ID" },
+        name: { type: "string" },
+        visibility: { type: "string", enum: ["external", "internal"] },
       },
       required: ["portal_id", "project_id", "tasklist_id"],
     },
   },
-  // User tools
   {
     name: "list_project_users",
-    description:
-      "List all users in a project who can be assigned to tasks.",
+    description: "List users in project.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID to list users from",
-        },
-        raw: {
-          type: "boolean",
-          description:
-            "Return full API response instead of slim response (default: false)",
-          default: false,
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        raw: { type: "boolean", description: "Return full API response", default: false },
       },
       required: ["portal_id", "project_id"],
     },
   },
   {
     name: "get_my_tasks",
-    description:
-      "Get tasks assigned to the current authenticated user across all projects.",
+    description: "Get my tasks across all projects.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        index: {
-          type: "number",
-          description: "Starting index for pagination (default: 0)",
-          default: 0,
-        },
-        range: {
-          type: "number",
-          description: "Number of tasks to retrieve (default: 100)",
-          default: 100,
-        },
-        raw: {
-          type: "boolean",
-          description:
-            "Return full API response instead of slim response (default: false)",
-          default: false,
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        index: { type: "number", description: "Pagination start index", default: 0 },
+        range: { type: "number", description: "Items to retrieve", default: 100 },
+        raw: { type: "boolean", description: "Return full API response", default: false },
       },
       required: ["portal_id"],
     },
   },
   {
     name: "assign_task",
-    description:
-      "Assign one or more users to a task. If user_ids is omitted, uses ZOHO_USER_ID env variable. Requires ZohoProjects.tasks.UPDATE scope.",
+    description: "Assign users to task. Uses ZOHO_USER_ID env if user_ids omitted.",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID containing the task",
-        },
-        task_id: {
-          type: "string",
-          description: "The task ID to assign users to",
-        },
-        user_ids: {
-          type: "array",
-          description:
-            "Array of user IDs to assign to the task. If omitted, uses ZOHO_USER_ID env variable.",
-          items: { type: "string" },
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        task_id: { type: "string", description: "Task ID" },
+        user_ids: { type: "array", description: "User IDs to assign", items: { type: "string" } },
       },
       required: ["portal_id", "project_id", "task_id"],
     },
   },
   {
     name: "add_task_dependency",
-    description:
-      "Add a dependency between two tasks (predecessor/successor relationship). Requires ZohoProjects.tasks.UPDATE scope.",
+    description: "Add task dependency (predecessor/successor).",
     inputSchema: {
       type: "object",
       properties: {
-        portal_id: {
-          type: "string",
-          description: "The Zoho Projects portal ID",
-        },
-        project_id: {
-          type: "string",
-          description: "The project ID containing the tasks",
-        },
-        task_id: {
-          type: "string",
-          description: "The task ID that will have the dependency (successor task)",
-        },
-        predecessor_id: {
-          type: "string",
-          description: "The task ID of the predecessor task",
-        },
-        dependency_type: {
-          type: "string",
-          description:
-            "Type of dependency: FS (Finish-to-Start), SS (Start-to-Start), SF (Start-to-Finish), FF (Finish-to-Finish). Default: FS",
-          enum: ["FS", "SS", "SF", "FF"],
-          default: "FS",
-        },
-        lag_value: {
-          type: "number",
-          description: "Lag time between tasks (optional)",
-        },
-        lag_type: {
-          type: "string",
-          description: "Unit for lag time: days or hours",
-          enum: ["days", "hours"],
-        },
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        task_id: { type: "string", description: "Successor task ID" },
+        predecessor_id: { type: "string", description: "Predecessor task ID" },
+        dependency_type: { type: "string", enum: ["FS", "SS", "SF", "FF"], default: "FS" },
+        lag_value: { type: "number", description: "Lag time" },
+        lag_type: { type: "string", enum: ["days", "hours"] },
       },
       required: ["portal_id", "project_id", "task_id", "predecessor_id"],
     },
@@ -1350,38 +990,6 @@ async function handleAddTaskDependency(args: {
   );
 }
 
-// Server instructions for LLM agents
-const SERVER_INSTRUCTIONS = `
-Zoho Projects MCP Server - Formatting Guidelines
-
-When creating or updating task descriptions and comments, use HTML formatting instead of Markdown.
-Zoho Projects uses a rich text editor that renders HTML, not Markdown.
-
-Supported HTML tags:
-- Text formatting: <b>, <strong>, <i>, <em>, <u>, <s>, <strike>
-- Paragraphs and breaks: <p>, <br>, <div>
-- Lists: <ul>, <ol>, <li>
-- Links: <a href="url">text</a>
-- Headings: <h1> through <h6>
-- Preformatted/code: <pre>, <code>
-- Tables: <table>, <tr>, <td>, <th>, <thead>, <tbody>
-- Block quotes: <blockquote>
-- Horizontal rules: <hr>
-- Images: <img src="url" alt="description">
-- Subscript/Superscript: <sub>, <sup>
-- Font styling: <span style="color: #hex; font-size: Npx; font-family: name;">
-
-Example comment:
-<p><b>Summary:</b> Task completed successfully.</p>
-<ul>
-  <li>Fixed the authentication bug</li>
-  <li>Added unit tests</li>
-</ul>
-<p>See <a href="https://example.com/pr/123">PR #123</a> for details.</p>
-
-Do NOT use Markdown syntax (like **bold**, *italic*, [links](url), or \`code\`) as it will appear as plain text in Zoho Projects.
-`.trim();
-
 // Create and configure the MCP server
 const server = new Server(
   {
@@ -1392,7 +1000,8 @@ const server = new Server(
     capabilities: {
       tools: {},
     },
-    instructions: SERVER_INSTRUCTIONS,
+    // Note: Use HTML formatting (not Markdown) for task descriptions and comments
+    instructions: "Use HTML formatting for descriptions/comments (not Markdown).",
   }
 );
 
