@@ -743,6 +743,26 @@ class ZohoProjectsServer {
             required: ["project_id", "task_id", "output_dir"],
           },
         },
+        {
+          name: "export_project",
+          description: "Export an entire Zoho project to a local directory. Creates a portable export with project.json containing all data and an images/ folder with downloaded attachments. Use this for importing projects into other systems.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              project_id: { type: "string", description: "Zoho Project ID to export" },
+              output_dir: {
+                type: "string",
+                description: "Absolute path to directory where export should be saved. Will create project.json and images/ subfolder."
+              },
+              include_images: {
+                type: "boolean",
+                description: "Whether to download inline images from task descriptions (default: true)",
+                default: true
+              },
+            },
+            required: ["project_id", "output_dir"],
+          },
+        },
       ],
     }));
 
@@ -838,6 +858,8 @@ class ZohoProjectsServer {
             return await this.extractInlineImages(params.html);
           case "download_task_images":
             return await this.downloadTaskImages(params.project_id, params.task_id, params.output_dir);
+          case "export_project":
+            return await this.exportProject(params.project_id, params.output_dir, params.include_images ?? true);
 
           default:
             throw new McpError(
@@ -1751,6 +1773,239 @@ class ZohoProjectsServer {
           downloadedImages: successCount,
           failedImages: urls.length - successCount,
           images: results
+        }, null, 2)
+      }],
+    };
+  }
+
+  // Export an entire project to a local directory
+  private async exportProject(projectId: string, outputDir: string, includeImages: boolean = true) {
+    // Ensure output directory exists
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const imagesDir = path.join(outputDir, 'images');
+    if (includeImages && !fs.existsSync(imagesDir)) {
+      fs.mkdirSync(imagesDir, { recursive: true });
+    }
+
+    console.error(`Exporting project ${projectId} to ${outputDir}`);
+
+    // 1. Fetch project details
+    console.error('Fetching project details...');
+    const projectData = await this.makeRequest(
+      `/portal/${this.config.portalId}/projects/${projectId}`
+    );
+    const project = projectData.projects?.[0] || projectData;
+
+    // 2. Fetch all milestones/phases with pagination
+    console.error('Fetching milestones...');
+    const milestones: any[] = [];
+    let milestonePage = 1;
+    const milestonePerPage = 100;
+    while (true) {
+      const phasesData = await this.makeRequest(
+        `/portal/${this.config.portalId}/projects/${projectId}/phases?page=${milestonePage}&per_page=${milestonePerPage}`
+      );
+      const phases = phasesData.phases || [];
+      milestones.push(...phases);
+
+      const pageInfo = phasesData.page_info;
+      if (!pageInfo?.has_next_page || phases.length === 0) {
+        break;
+      }
+      milestonePage++;
+    }
+    console.error(`Fetched ${milestones.length} milestones`);
+
+    // 3. Fetch all tasks with pagination
+    console.error('Fetching tasks...');
+    const tasks: any[] = [];
+    let taskPage = 1;
+    const taskPerPage = 100;
+    while (true) {
+      const tasksData = await this.makeRequest(
+        `/portal/${this.config.portalId}/projects/${projectId}/tasks?page=${taskPage}&per_page=${taskPerPage}`
+      );
+      const tasksList = tasksData.tasks || [];
+      tasks.push(...tasksList);
+
+      const pageInfo = tasksData.page_info;
+      if (!pageInfo?.has_next_page || tasksList.length === 0) {
+        break;
+      }
+      taskPage++;
+      console.error(`Fetched ${tasks.length} tasks so far (page ${taskPage - 1})...`);
+    }
+    console.error(`Fetched ${tasks.length} total tasks`);
+
+    // 4. Optionally download inline images from task descriptions
+    const imageMapping: Record<string, string> = {};
+    let totalImages = 0;
+    let downloadedImages = 0;
+
+    if (includeImages) {
+      console.error('Downloading inline images from task descriptions...');
+
+      for (const task of tasks) {
+        const description = task.description || '';
+        if (!description) continue;
+
+        // Extract image URLs from this task
+        const imgRegex = /<img[^>]+src="([^"]+)"/gi;
+        let match;
+        const taskImages: string[] = [];
+
+        while ((match = imgRegex.exec(description)) !== null) {
+          const url = match[1];
+          if (url.includes('projects.zoho.com') || url.includes('projectsapi.zoho.com') || url.includes('viewInlineAttachment')) {
+            taskImages.push(url);
+          }
+        }
+
+        if (taskImages.length === 0) continue;
+
+        totalImages += taskImages.length;
+
+        for (let i = 0; i < taskImages.length; i++) {
+          const url = taskImages[i];
+
+          // Skip if we already downloaded this URL
+          if (imageMapping[url]) continue;
+
+          // Generate unique filename based on task ID and index
+          const baseName = `task_${task.id}_img_${i + 1}`;
+          const outputPath = path.join(imagesDir, baseName);
+
+          try {
+            // Download the image using the existing method (but without returning MCP response)
+            // Inline the download logic here to get raw results
+            const urlObj = new URL(url);
+            const fileParam = urlObj.searchParams.get('file');
+            if (!fileParam) {
+              console.error(`Skipping invalid image URL (no file param): ${url}`);
+              continue;
+            }
+
+            let downloaded = false;
+            const domains = ['projectsapi.zoho.com', 'projectsapi.zoho.eu', 'projects.zoho.com', 'projects.zoho.eu'];
+            const endpoints = [
+              (domain: string) => `https://${domain}/restapi/portal/${this.config.portalId}/inlineattachment/?file=${encodeURIComponent(fileParam)}`,
+              (domain: string) => `https://${domain.replace('projectsapi.', 'projects.')}/viewInlineAttachmentForApi/image?file=${encodeURIComponent(fileParam)}`,
+              (domain: string) => `https://${domain.replace('projectsapi.', 'projects.')}/viewInlineAttachment/image?file=${encodeURIComponent(fileParam)}`,
+            ];
+
+            for (const domain of domains) {
+              if (downloaded) break;
+              for (const endpointFn of endpoints) {
+                if (downloaded) break;
+                const downloadUrl = endpointFn(domain);
+                try {
+                  const response = await fetch(downloadUrl, {
+                    headers: {
+                      'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    },
+                    redirect: 'follow',
+                  });
+
+                  if (response.ok) {
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.startsWith('image/')) {
+                      const arrayBuffer = await response.arrayBuffer();
+                      const buffer = Buffer.from(arrayBuffer);
+
+                      const ext = this.getExtensionFromMimeType(contentType);
+                      const finalPath = `${outputPath}.${ext}`;
+                      const relativePath = `images/${baseName}.${ext}`;
+
+                      fs.writeFileSync(finalPath, buffer);
+                      imageMapping[url] = relativePath;
+                      downloadedImages++;
+                      downloaded = true;
+                    }
+                  }
+                } catch (e) {
+                  // Continue to next endpoint
+                }
+              }
+            }
+
+            if (!downloaded) {
+              console.error(`Failed to download image: ${url}`);
+            }
+          } catch (e) {
+            console.error(`Error downloading image from task ${task.id}: ${e}`);
+          }
+        }
+      }
+      console.error(`Downloaded ${downloadedImages}/${totalImages} images`);
+    }
+
+    // 5. Build export object
+    const exportData = {
+      exportVersion: 1,
+      exportedAt: new Date().toISOString(),
+      portalId: this.config.portalId,
+      project: {
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        status: project.status,
+        start_date: project.start_date,
+        end_date: project.end_date,
+        created_time: project.created_time,
+        owner: project.owner,
+      },
+      milestones: milestones.map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        start_date: m.start_date,
+        end_date: m.end_date,
+        status: m.status,
+        sequence: m.sequence,
+      })),
+      tasks: tasks.map((t: any) => ({
+        id: t.id,
+        prefix: t.prefix || t.key,
+        name: t.name,
+        description: t.description,
+        status: t.status,
+        priority: t.priority,
+        start_date: t.start_date,
+        end_date: t.end_date,
+        created_time: t.created_time,
+        completed_time: t.completed_time,
+        milestone: t.milestone,
+        tasklist: t.tasklist,
+        percent_complete: t.percent_complete,
+        duration: t.duration,
+      })),
+      imageMapping: imageMapping,
+      stats: {
+        totalMilestones: milestones.length,
+        totalTasks: tasks.length,
+        totalImages: totalImages,
+        downloadedImages: downloadedImages,
+      }
+    };
+
+    // 6. Write project.json
+    const projectJsonPath = path.join(outputDir, 'project.json');
+    fs.writeFileSync(projectJsonPath, JSON.stringify(exportData, null, 2));
+    console.error(`Export complete: ${projectJsonPath}`);
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          success: true,
+          outputDir: outputDir,
+          projectJsonPath: projectJsonPath,
+          imagesDir: includeImages ? imagesDir : null,
+          stats: exportData.stats,
+          message: `Exported project "${project.name}" with ${milestones.length} milestones, ${tasks.length} tasks, and ${downloadedImages}/${totalImages} images`
         }, null, 2)
       }],
     };
