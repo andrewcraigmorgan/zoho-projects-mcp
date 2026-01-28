@@ -1015,7 +1015,8 @@ class ZohoProjectsServer {
             const taskPrefix = (result.key || result.prefix || '').toUpperCase();
             if (taskPrefix === normalizedPrefix) {
               // Found it! Get full task details via v3 API
-              const taskId = result.id || result.id_string;
+              // Use id_string to avoid JavaScript precision issues with large numeric IDs
+              const taskId = result.id_string || result.id;
               if (taskId) {
                 const fullTask = await this.makeRequest(
                   `/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}`
@@ -1038,6 +1039,7 @@ class ZohoProjectsServer {
     // Strategy 2: Try portal-level search
     try {
       const searchEndpoint = `${restBaseUrl}/restapi/portal/${this.config.portalId}/search?search_term=${encodeURIComponent(normalizedPrefix)}&module=tasks&index=0&range=50`;
+      console.error(`[get_task_by_prefix] Searching portal: ${searchEndpoint}`);
 
       const response = await fetch(searchEndpoint, {
         method: 'GET',
@@ -1047,16 +1049,22 @@ class ZohoProjectsServer {
         },
       });
 
+      console.error(`[get_task_by_prefix] Search response status: ${response.status}`);
+
       if (response.ok) {
-        const searchData = await response.json() as { search_results?: any[]; tasks?: any[] };
+        const searchData = await response.json() as { search_results?: any[]; tasks?: any[]; tasks_count?: number };
         const searchResults = searchData.search_results || searchData.tasks || [];
+        console.error(`[get_task_by_prefix] Found ${searchResults.length} results (tasks_count: ${searchData.tasks_count})`);
 
         for (const result of searchResults) {
           const taskPrefix = (result.key || result.prefix || '').toUpperCase();
+          console.error(`[get_task_by_prefix] Checking result: key="${result.key}", prefix="${result.prefix}", normalized="${taskPrefix}" vs searching for "${normalizedPrefix}"`);
           if (taskPrefix === normalizedPrefix) {
             // Found it! Get full task details via v3 API
-            const taskProjectId = result.project_id || result.project?.id;
-            const taskId = result.id || result.id_string;
+            // Use id_string to avoid JavaScript precision issues with large numeric IDs
+            const taskProjectId = result.project?.id_string || result.project?.id || result.project_id;
+            const taskId = result.id_string || result.id;
+            console.error(`[get_task_by_prefix] Match found! projectId=${taskProjectId}, taskId=${taskId}`);
             if (taskProjectId && taskId) {
               const fullTask = await this.makeRequest(
                 `/portal/${this.config.portalId}/projects/${taskProjectId}/tasks/${taskId}`
@@ -1070,6 +1078,10 @@ class ZohoProjectsServer {
             };
           }
         }
+        console.error(`[get_task_by_prefix] No match found in search results`);
+      } else {
+        const errorText = await response.text();
+        console.error(`[get_task_by_prefix] Search failed: ${response.status} - ${errorText}`);
       }
     } catch (searchError) {
       console.error("Portal-level search failed:", searchError);
