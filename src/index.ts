@@ -670,6 +670,19 @@ class ZohoProjectsServer {
           },
         },
         {
+          name: "delete_task_comment",
+          description: "Delete a comment from a task",
+          inputSchema: {
+            type: "object",
+            properties: {
+              project_id: { type: "string", description: "Project ID" },
+              task_id: { type: "string", description: "Task ID" },
+              comment_id: { type: "string", description: "Comment ID to delete" },
+            },
+            required: ["project_id", "task_id", "comment_id"],
+          },
+        },
+        {
           name: "upload_task_attachment",
           description: "Upload a file attachment to a task",
           inputSchema: {
@@ -848,6 +861,8 @@ class ZohoProjectsServer {
             return await this.addTaskComment(params.project_id, params.task_id, params.content);
           case "edit_task_comment":
             return await this.editTaskComment(params.project_id, params.task_id, params.comment_id, params.content);
+          case "delete_task_comment":
+            return await this.deleteTaskComment(params.project_id, params.task_id, params.comment_id);
           case "upload_task_attachment":
             return await this.uploadTaskAttachment(params.project_id, params.task_id, params.file_path, params.file_name);
           case "list_task_attachments":
@@ -1482,6 +1497,28 @@ class ZohoProjectsServer {
         {
           type: "text",
           text: `Comment updated successfully.\n\nView task: ${taskUrl}\n\nResponse:\n${JSON.stringify(data, null, 2)}`,
+        },
+      ],
+    };
+  }
+
+  private async deleteTaskComment(
+    projectId: string,
+    taskId: string,
+    commentId: string
+  ) {
+    const data = await this.makeRequest(
+      `/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
+      "DELETE"
+    );
+
+    const taskUrl = `https://projects.zoho.com/portal/mtcmedialtd#taskdetail/${projectId}/${taskId}`;
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Comment ${commentId} deleted successfully.\n\nView task: ${taskUrl}\n\nResponse:\n${JSON.stringify(data, null, 2)}`,
         },
       ],
     };
