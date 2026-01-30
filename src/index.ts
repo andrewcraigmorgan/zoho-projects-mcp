@@ -1411,16 +1411,36 @@ class ZohoProjectsServer {
     taskId: string,
     content: string
   ) {
+    // Validate content is not empty or whitespace-only
+    if (!content || content.trim() === '') {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'Comment content cannot be empty. Please provide meaningful content before posting.'
+      );
+    }
+
+    // Validate minimum content length (helps prevent accidental submissions)
+    if (content.trim().length < 10) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Comment content too short (${content.trim().length} chars). Minimum 10 characters required to prevent accidental submissions.`
+      );
+    }
+
     const data = await this.makeRequest(
       `/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/comments`,
       "POST",
       { comment: content }
     );
+
+    // Construct task URL for easy access
+    const taskUrl = `https://projects.zoho.com/portal/mtcmedialtd#taskdetail/${projectId}/${taskId}`;
+
     return {
       content: [
         {
           type: "text",
-          text: `Comment added successfully:\n${JSON.stringify(data, null, 2)}`,
+          text: `Comment added successfully.\n\nView task: ${taskUrl}\n\nResponse:\n${JSON.stringify(data, null, 2)}`,
         },
       ],
     };
@@ -1432,16 +1452,36 @@ class ZohoProjectsServer {
     commentId: string,
     content: string
   ) {
+    // Validate content is not empty or whitespace-only
+    if (!content || content.trim() === '') {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'Comment content cannot be empty. Please provide meaningful content before updating.'
+      );
+    }
+
+    // Validate minimum content length (helps prevent accidental submissions)
+    if (content.trim().length < 10) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Comment content too short (${content.trim().length} chars). Minimum 10 characters required to prevent accidental submissions.`
+      );
+    }
+
     const data = await this.makeRequest(
       `/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
       "PATCH",
       { comment: content }
     );
+
+    // Construct task URL for easy access
+    const taskUrl = `https://projects.zoho.com/portal/mtcmedialtd#taskdetail/${projectId}/${taskId}`;
+
     return {
       content: [
         {
           type: "text",
-          text: `Comment updated successfully:\n${JSON.stringify(data, null, 2)}`,
+          text: `Comment updated successfully.\n\nView task: ${taskUrl}\n\nResponse:\n${JSON.stringify(data, null, 2)}`,
         },
       ],
     };
