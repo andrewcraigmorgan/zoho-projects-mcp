@@ -743,6 +743,19 @@ class ZohoProjectsServer {
           },
         },
         {
+          name: "delete_task_attachment",
+          description: "Delete an attachment from a task",
+          inputSchema: {
+            type: "object",
+            properties: {
+              project_id: { type: "string", description: "Project ID" },
+              task_id: { type: "string", description: "Task ID" },
+              attachment_id: { type: "string", description: "Attachment ID to delete" },
+            },
+            required: ["project_id", "task_id", "attachment_id"],
+          },
+        },
+        {
           name: "download_inline_image",
           description: "Download an inline image from a Zoho task description URL to a local file. Use this to download screenshots/images embedded in task descriptions.",
           inputSchema: {
@@ -903,6 +916,8 @@ class ZohoProjectsServer {
             return await this.uploadTaskAttachment(params.project_id, params.task_id, params.file_path, params.file_name);
           case "list_task_attachments":
             return await this.listTaskAttachments(params.project_id, params.task_id);
+          case "delete_task_attachment":
+            return await this.deleteTaskAttachment(params.project_id, params.task_id, params.attachment_id);
           case "download_inline_image":
             return await this.downloadInlineImage(params.image_url, params.output_path);
           case "extract_inline_images":
@@ -1840,6 +1855,39 @@ class ZohoProjectsServer {
     const data = await response.json();
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    };
+  }
+
+  // Delete task attachment
+  private async deleteTaskAttachment(projectId: string, taskId: string, attachmentId: string) {
+    // Use REST API endpoint for attachments
+    const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
+
+    // Refresh token if needed
+    if (Date.now() >= this.tokenExpiresAt) {
+      await this.refreshAccessToken();
+    }
+
+    const url = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}/`;
+
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to delete attachment: ${response.status} - ${errorText}`
+      );
+    }
+
+    return {
+      content: [{ type: "text", text: `Attachment ${attachmentId} deleted successfully.` }],
     };
   }
 
