@@ -118,3 +118,27 @@ Examples:
 - **Pagination**: Supported on list operations with page/per_page params
 - **Optional project scoping**: Some operations (tasks, issues, users) work at portal or project level
 - **Delete behavior**: Projects use trash endpoint, tasks/issues use DELETE
+
+## Task Creation Rules
+
+When creating or updating tasks, follow these rules:
+
+1. **Always use the `duration` field for estimated hours** - Never put hours in task titles or descriptions. Use the `duration` parameter which accepts a number in hours (e.g., `duration: 2` for 2 hours, `duration: 1.5` for 1.5 hours).
+
+2. **Duration is always in hours** - The MCP automatically sets `duration_type` to "hrs". Do not specify days.
+
+3. **Keep task titles clean** - Task names should describe the work, not include time estimates.
+   - Good: "Fix SQL injection in Post Filter"
+   - Bad: "Fix SQL injection in Post Filter (0.5h)"
+
+4. **Keep descriptions focused on the work** - Do not include "Estimated hours: X" lines in descriptions. The duration field handles this.
+
+5. **Example task creation**:
+   ```
+   create_task:
+     project_id: "123"
+     name: "Implement user authentication"
+     description: "Add login/logout functionality with session management"
+     duration: 4
+     priority: "high"
+   ```

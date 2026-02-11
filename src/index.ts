@@ -362,6 +362,10 @@ class ZohoProjectsServer {
                 type: "string",
                 description: "Tasklist ID to add the task to",
               },
+              duration: {
+                type: "number",
+                description: "Estimated work hours for the task (e.g., 2 for 2 hours, 1.5 for 1.5 hours)",
+              },
             },
             required: ["project_id", "name"],
           },
@@ -388,6 +392,10 @@ class ZohoProjectsServer {
               end_date: { type: "string", description: "End date (YYYY-MM-DD)" },
               status_id: { type: "string", description: "Status ID to set for the task" },
               tasklist_id: { type: "string", description: "Tasklist ID to move the task to" },
+              duration: {
+                type: "number",
+                description: "Estimated work hours for the task (e.g., 2 for 2 hours, 1.5 for 1.5 hours)",
+              },
             },
             required: ["project_id", "task_id"],
           },
@@ -1152,6 +1160,18 @@ class ZohoProjectsServer {
     if (tasklist_id) {
       taskData.tasklist = { id: tasklist_id };
     }
+    // Convert duration to object format expected by API (HH:MM format for hours)
+    if (taskData.duration !== undefined) {
+      const hours = Math.floor(Number(taskData.duration));
+      const minutes = Math.round((Number(taskData.duration) - hours) * 60);
+      const durationValue = `${hours}:${minutes.toString().padStart(2, '0')}`;
+      const durationType = taskData.duration_type || "hours";
+      delete taskData.duration_type;
+      taskData.duration = {
+        value: durationValue,
+        type: durationType
+      };
+    }
     const data = await this.makeRequest(
       `/portal/${this.config.portalId}/projects/${project_id}/tasks`,
       "POST",
@@ -1176,6 +1196,18 @@ class ZohoProjectsServer {
     // Map tasklist_id to tasklist for the API
     if (tasklist_id) {
       taskData.tasklist = { id: tasklist_id };
+    }
+    // Convert duration to object format expected by API (HH:MM format for hours)
+    if (taskData.duration !== undefined) {
+      const hours = Math.floor(Number(taskData.duration));
+      const minutes = Math.round((Number(taskData.duration) - hours) * 60);
+      const durationValue = `${hours}:${minutes.toString().padStart(2, '0')}`;
+      const durationType = taskData.duration_type || "hours";
+      delete taskData.duration_type;
+      taskData.duration = {
+        value: durationValue,
+        type: durationType
+      };
     }
     const data = await this.makeRequest(
       `/portal/${this.config.portalId}/projects/${project_id}/tasks/${task_id}`,
@@ -1398,12 +1430,44 @@ class ZohoProjectsServer {
 
   // Task Statuses
   private async listStatuses(projectId: string) {
-    const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}/tasklayouts`
-    );
-    return {
-      content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
-    };
+    // Try the fields endpoint to get status field options
+    try {
+      const data = await this.makeRequest(
+        `/portal/${this.config.portalId}/projects/${projectId}/fields?module=Tasks`
+      );
+
+      // Extract status field from the response
+      if (data.fields) {
+        const statusField = data.fields.find((f: any) => f.field_name === 'status' || f.display_name === 'Status');
+        if (statusField && statusField.pick_list_values) {
+          return {
+            content: [{ type: "text", text: JSON.stringify({
+              statuses: statusField.pick_list_values,
+              field_info: statusField
+            }, null, 2) }],
+          };
+        }
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+      };
+    } catch (error) {
+      // Fallback: return common status IDs based on project type
+      return {
+        content: [{ type: "text", text: JSON.stringify({
+          error: "Could not fetch statuses from API. Common status IDs for reference:",
+          common_statuses: [
+            { name: "To Do", note: "Default open status - check task responses for actual ID" },
+            { name: "Open", note: "In progress status - check task responses for actual ID" },
+            { name: "In Review", note: "Review status - check task responses for actual ID" },
+            { name: "Need More Information", note: "Blocked status - check task responses for actual ID" },
+            { name: "Closed", note: "Completed status - check task responses for actual ID" }
+          ],
+          suggestion: "Get actual status IDs by examining the 'status' field in task responses from list_tasks or get_task"
+        }, null, 2) }],
+      };
+    }
   }
 
   // Task Comments
