@@ -744,13 +744,13 @@ class ZohoProjectsServer {
         },
         {
           name: "delete_task_attachment",
-          description: "Delete an attachment from a task",
+          description: "Delete an attachment from a task. For WorkDrive attachments, use the third_party_file_id as the attachment_id.",
           inputSchema: {
             type: "object",
             properties: {
               project_id: { type: "string", description: "Project ID" },
               task_id: { type: "string", description: "Task ID" },
-              attachment_id: { type: "string", description: "Attachment ID to delete" },
+              attachment_id: { type: "string", description: "Attachment ID (or third_party_file_id for WorkDrive files)" },
             },
             required: ["project_id", "task_id", "attachment_id"],
           },
@@ -1860,35 +1860,61 @@ class ZohoProjectsServer {
 
   // Delete task attachment
   private async deleteTaskAttachment(projectId: string, taskId: string, attachmentId: string) {
-    // Use REST API endpoint for attachments
-    const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
-
     // Refresh token if needed
     if (Date.now() >= this.tokenExpiresAt) {
       await this.refreshAccessToken();
     }
 
-    const url = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}/`;
+    // Check if this looks like a WorkDrive file ID (starts with letters like "ddfmx")
+    const isWorkDriveId = /^[a-z]/.test(attachmentId);
 
-    const response = await fetch(url, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    if (isWorkDriveId) {
+      // Try WorkDrive API for third-party attachments
+      const workdriveUrl = `https://workdrive.zoho.com/api/v1/files/${attachmentId}`;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to delete attachment: ${response.status} - ${errorText}`
-      );
+      const response = await fetch(workdriveUrl, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new McpError(
+          ErrorCode.InternalError,
+          `Failed to delete WorkDrive attachment: ${response.status} - ${errorText}`
+        );
+      }
+
+      return {
+        content: [{ type: "text", text: `WorkDrive attachment ${attachmentId} deleted successfully.` }],
+      };
+    } else {
+      // Use REST API endpoint for standard attachments
+      const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
+      const url = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}/`;
+
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new McpError(
+          ErrorCode.InternalError,
+          `Failed to delete attachment: ${response.status} - ${errorText}`
+        );
+      }
+
+      return {
+        content: [{ type: "text", text: `Attachment ${attachmentId} deleted successfully.` }],
+      };
     }
-
-    return {
-      content: [{ type: "text", text: `Attachment ${attachmentId} deleted successfully.` }],
-    };
   }
 
   // Extract inline image URLs from HTML
