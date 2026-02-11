@@ -1,5 +1,16 @@
 # Zoho Projects API Formatting Guide
 
+## Comment Workflow
+
+**Always show the user a rendered preview before posting comments.** Never show raw HTML to the user - render it as formatted text so they can see exactly how it will appear in Zoho. Only post after user approval.
+
+## Writing Style
+
+- **Write in plain English** - avoid jargon, technical terms, and corporate-speak
+- No phrases like "Update:", "Per-Zone Breakdown", "Implementation Complete"
+- Write naturally as if speaking to a colleague
+- Keep it conversational and clear
+
 ## Comments
 
 Zoho Projects converts newlines to `<br>` tags automatically. To avoid excessive spacing:

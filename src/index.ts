@@ -15,6 +15,7 @@ import * as path from "path";
 interface ZohoConfig {
   accessToken: string;
   portalId: string;
+  portalName?: string;
   apiDomain?: string;
   refreshToken?: string;
   clientId?: string;
@@ -45,6 +46,7 @@ class ZohoProjectsServer {
     this.config = {
       accessToken: process.env.ZOHO_ACCESS_TOKEN || "",
       portalId: process.env.ZOHO_PORTAL_ID || "",
+      portalName: process.env.ZOHO_PORTAL_NAME || "mtcmedialtd",
       apiDomain: process.env.ZOHO_API_DOMAIN || "https://projectsapi.zoho.com",
       refreshToken: process.env.ZOHO_REFRESH_TOKEN || "",
       clientId: process.env.ZOHO_CLIENT_ID || "",
@@ -1633,7 +1635,7 @@ class ZohoProjectsServer {
     );
 
     // Construct task URL for easy access
-    const taskUrl = `https://projects.zoho.com/portal/mtcmedialtd#taskdetail/${projectId}/${taskId}`;
+    const taskUrl = `https://projects.zoho.com/portal/${this.config.portalName}/#taskdetail/${projectId}/${taskId}/${taskId}`;
 
     return {
       content: [
@@ -1674,7 +1676,7 @@ class ZohoProjectsServer {
     );
 
     // Construct task URL for easy access
-    const taskUrl = `https://projects.zoho.com/portal/mtcmedialtd#taskdetail/${projectId}/${taskId}`;
+    const taskUrl = `https://projects.zoho.com/portal/${this.config.portalName}/#taskdetail/${projectId}/${taskId}/${taskId}`;
 
     return {
       content: [
@@ -1696,7 +1698,7 @@ class ZohoProjectsServer {
       "DELETE"
     );
 
-    const taskUrl = `https://projects.zoho.com/portal/mtcmedialtd#taskdetail/${projectId}/${taskId}`;
+    const taskUrl = `https://projects.zoho.com/portal/${this.config.portalName}/#taskdetail/${projectId}/${taskId}/${taskId}`;
 
     return {
       content: [
