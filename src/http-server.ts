@@ -324,7 +324,7 @@ class ZohoProjectsServer {
             properties: {
               project_id: { type: "string", description: "Project ID" },
               name: { type: "string", description: "Task name" },
-              description: { type: "string", description: "Task description" },
+              description: { type: "string", description: "Task description. IMPORTANT: Use HTML formatting (not Markdown). Use <p>, <strong>, <ul>, <ol>, <li>, <code>, <pre> tags. Markdown will display as raw text." },
               priority: {
                 type: "string",
                 description: "Task priority",
@@ -352,7 +352,7 @@ class ZohoProjectsServer {
               project_id: { type: "string", description: "Project ID" },
               task_id: { type: "string", description: "Task ID" },
               name: { type: "string", description: "Task name" },
-              description: { type: "string", description: "Task description" },
+              description: { type: "string", description: "Task description. IMPORTANT: Use HTML formatting (not Markdown). Use <p>, <strong>, <ul>, <ol>, <li>, <code>, <pre> tags. Markdown will display as raw text." },
               priority: {
                 type: "string",
                 description: "Task priority",
@@ -487,6 +487,42 @@ class ZohoProjectsServer {
             required: ["project_id", "name"],
           },
         },
+        {
+          name: "update_phase",
+          description: "Update a phase/milestone (name, dates, owner, status)",
+          inputSchema: {
+            type: "object",
+            properties: {
+              project_id: { type: "string", description: "Project ID" },
+              phase_id: { type: "string", description: "Phase/Milestone ID" },
+              name: { type: "string", description: "Phase name" },
+              start_date: {
+                type: "string",
+                description: "Start date (YYYY-MM-DD)",
+              },
+              end_date: { type: "string", description: "End date (YYYY-MM-DD)" },
+              owner_zpuid: { type: "string", description: "Owner user ZPUID" },
+              status: {
+                type: "string",
+                description: "Phase status",
+                enum: ["active", "completed"],
+              },
+            },
+            required: ["project_id", "phase_id"],
+          },
+        },
+        {
+          name: "delete_phase",
+          description: "Delete a phase/milestone from a project",
+          inputSchema: {
+            type: "object",
+            properties: {
+              project_id: { type: "string", description: "Project ID" },
+              phase_id: { type: "string", description: "Phase/Milestone ID to delete" },
+            },
+            required: ["project_id", "phase_id"],
+          },
+        },
 
         // Search
         {
@@ -598,6 +634,10 @@ class ZohoProjectsServer {
             return await this.listPhases(params.project_id, params.page, params.per_page);
           case "create_phase":
             return await this.createPhase(params);
+          case "update_phase":
+            return await this.updatePhase(params);
+          case "delete_phase":
+            return await this.deletePhase(params.project_id, params.phase_id);
 
           // Search
           case "search":
@@ -862,6 +902,148 @@ class ZohoProjectsServer {
         {
           type: "text",
           text: `Phase created successfully:\n${JSON.stringify(data, null, 2)}`,
+        },
+      ],
+    };
+  }
+
+  private async updatePhase(params: any, isRetry: boolean = false): Promise<any> {
+    const { project_id, phase_id, ...phaseData } = params;
+
+    // Use REST API (not v3) for milestone updates as v3 doesn't support it
+    const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
+
+    // First fetch the existing milestone to get required fields
+    const getEndpoint = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${project_id}/milestones/${phase_id}/`;
+    const getResponse = await fetch(getEndpoint, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
+      },
+    });
+
+    // Handle 401 with token refresh
+    if (getResponse.status === 401 && !isRetry && this.config.refreshToken) {
+      console.error("Received 401 error, attempting token refresh...");
+      await this.refreshAccessToken();
+      return this.updatePhase(params, true);
+    }
+
+    if (!getResponse.ok) {
+      const errorText = await getResponse.text();
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to fetch milestone: ${getResponse.status} - ${errorText}`
+      );
+    }
+
+    const existingData: any = await getResponse.json();
+    const milestone = existingData.milestones?.[0] || existingData;
+
+    // Helper to convert YYYY-MM-DD to MM-DD-YYYY
+    const convertDate = (dateStr: string) => {
+      if (!dateStr) return '';
+      const parts = dateStr.split('-');
+      if (parts.length === 3 && parts[0].length === 4) {
+        // YYYY-MM-DD format, convert to MM-DD-YYYY
+        return `${parts[1]}-${parts[2]}-${parts[0]}`;
+      }
+      return dateStr; // Already in correct format or other format
+    };
+
+    // Build form data with required fields from existing + updates
+    const formData = new URLSearchParams();
+    formData.append('name', phaseData.name || milestone.name);
+    formData.append('flag', phaseData.flag || milestone.flag || 'internal');
+    formData.append('owner', phaseData.owner_zpuid || milestone.owner_id || milestone.owner?.id);
+
+    // Handle dates - convert from YYYY-MM-DD to MM-DD-YYYY
+    if (phaseData.start_date) {
+      formData.append('start_date', convertDate(phaseData.start_date));
+    } else if (milestone.start_date) {
+      formData.append('start_date', milestone.start_date);
+    }
+
+    if (phaseData.end_date) {
+      formData.append('end_date', convertDate(phaseData.end_date));
+    } else if (milestone.end_date) {
+      formData.append('end_date', milestone.end_date);
+    }
+
+    if (phaseData.status) formData.append('status', phaseData.status);
+
+    const updateEndpoint = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${project_id}/milestones/${phase_id}/`;
+    const response = await fetch(updateEndpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData.toString(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Milestone update error: ${response.status} - ${errorText}`
+      );
+    }
+
+    const data = await response.json();
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Phase updated successfully:\n${JSON.stringify(data, null, 2)}`,
+        },
+      ],
+    };
+  }
+
+  private async deletePhase(projectId: string, phaseId: string, isRetry: boolean = false): Promise<any> {
+    // Use REST API for milestone deletion
+    const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
+    const endpoint = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/milestones/${phaseId}/`;
+
+    const response = await fetch(endpoint, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
+      },
+    });
+
+    // Handle 401 with token refresh
+    if (response.status === 401 && !isRetry && this.config.refreshToken) {
+      console.error("Received 401 error, attempting token refresh...");
+      await this.refreshAccessToken();
+      return this.deletePhase(projectId, phaseId, true);
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to delete milestone: ${response.status} - ${errorText}`
+      );
+    }
+
+    // DELETE typically returns 200 or 204 on success
+    let data: Record<string, any> = {};
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        data = await response.json() as Record<string, any>;
+      } catch {
+        // Empty response is fine for DELETE
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Phase/Milestone deleted successfully:\n${JSON.stringify(data, null, 2)}`,
         },
       ],
     };

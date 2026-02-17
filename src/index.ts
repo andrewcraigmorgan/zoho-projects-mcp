@@ -345,7 +345,7 @@ class ZohoProjectsServer {
             properties: {
               project_id: { type: "string", description: "Project ID" },
               name: { type: "string", description: "Task name" },
-              description: { type: "string", description: "Task description" },
+              description: { type: "string", description: "Task description. IMPORTANT: Use HTML formatting (not Markdown). Use <p>, <strong>, <ul>, <ol>, <li>, <code>, <pre> tags. Markdown will display as raw text." },
               priority: {
                 type: "string",
                 description: "Task priority",
@@ -381,7 +381,7 @@ class ZohoProjectsServer {
               project_id: { type: "string", description: "Project ID" },
               task_id: { type: "string", description: "Task ID" },
               name: { type: "string", description: "Task name" },
-              description: { type: "string", description: "Task description" },
+              description: { type: "string", description: "Task description. IMPORTANT: Use HTML formatting (not Markdown). Use <p>, <strong>, <ul>, <ol>, <li>, <code>, <pre> tags. Markdown will display as raw text." },
               priority: {
                 type: "string",
                 description: "Task priority",
@@ -410,6 +410,18 @@ class ZohoProjectsServer {
             properties: {
               project_id: { type: "string", description: "Project ID" },
               task_id: { type: "string", description: "Task ID" },
+            },
+            required: ["project_id", "task_id"],
+          },
+        },
+        {
+          name: "restore_task",
+          description: "Restore a deleted task from trash",
+          inputSchema: {
+            type: "object",
+            properties: {
+              project_id: { type: "string", description: "Project ID" },
+              task_id: { type: "string", description: "Task ID of the deleted task to restore" },
             },
             required: ["project_id", "task_id"],
           },
@@ -585,6 +597,18 @@ class ZohoProjectsServer {
                 description: "Phase status",
                 enum: ["active", "completed"],
               },
+            },
+            required: ["project_id", "phase_id"],
+          },
+        },
+        {
+          name: "delete_phase",
+          description: "Delete a phase/milestone from a project",
+          inputSchema: {
+            type: "object",
+            properties: {
+              project_id: { type: "string", description: "Project ID" },
+              phase_id: { type: "string", description: "Phase/Milestone ID to delete" },
             },
             required: ["project_id", "phase_id"],
           },
@@ -866,6 +890,8 @@ class ZohoProjectsServer {
             return await this.updateTask(params);
           case "delete_task":
             return await this.deleteTask(params.project_id, params.task_id);
+          case "restore_task":
+            return await this.restoreTask(params.project_id, params.task_id);
           case "create_tasklist":
             return await this.createTasklist(params);
           case "move_task":
@@ -890,6 +916,8 @@ class ZohoProjectsServer {
             return await this.createPhase(params);
           case "update_phase":
             return await this.updatePhase(params);
+          case "delete_phase":
+            return await this.deletePhase(params.project_id, params.phase_id);
 
           // Search
           case "search":
@@ -1282,6 +1310,59 @@ class ZohoProjectsServer {
     };
   }
 
+  private async restoreTask(projectId: string, taskId: string) {
+    // Use REST API endpoint for restoring tasks from trash
+    const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
+
+    // Refresh token if needed
+    if (Date.now() >= this.tokenExpiresAt) {
+      await this.refreshAccessToken();
+    }
+
+    // Try multiple possible endpoints for restoring from trash
+    const endpoints = [
+      `${restBaseUrl}/restapi/portal/${this.config.portalId}/trash/restore/`,
+      `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/trash/restore/`,
+    ];
+
+    let lastError = '';
+
+    for (const url of endpoints) {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: `module=tasks&id=${taskId}`,
+        });
+
+        if (response.ok) {
+          const text = await response.text();
+          const data = text ? JSON.parse(text) : { success: true };
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Task restored successfully:\n${JSON.stringify(data, null, 2)}`,
+              },
+            ],
+          };
+        } else {
+          lastError = `${url}: ${response.status} - ${await response.text()}`;
+        }
+      } catch (e) {
+        lastError = `${url}: ${e}`;
+      }
+    }
+
+    throw new McpError(
+      ErrorCode.InternalError,
+      `Failed to restore task. Tried multiple endpoints. Last error: ${lastError}`
+    );
+  }
+
   private async createTasklist(params: any) {
     const { project_id, milestone_id, ...tasklistData } = params;
     // Map milestone_id to milestone for the API
@@ -1512,6 +1593,54 @@ class ZohoProjectsServer {
         {
           type: "text",
           text: `Phase updated successfully:\n${JSON.stringify(data, null, 2)}`,
+        },
+      ],
+    };
+  }
+
+  private async deletePhase(projectId: string, phaseId: string, isRetry: boolean = false): Promise<any> {
+    // Use REST API for milestone deletion
+    const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
+    const endpoint = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/milestones/${phaseId}/`;
+
+    const response = await fetch(endpoint, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
+      },
+    });
+
+    // Handle 401 with token refresh
+    if (response.status === 401 && !isRetry && this.config.refreshToken) {
+      console.error("Received 401 error, attempting token refresh...");
+      await this.refreshAccessToken();
+      return this.deletePhase(projectId, phaseId, true);
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to delete milestone: ${response.status} - ${errorText}`
+      );
+    }
+
+    // DELETE typically returns 200 or 204 on success
+    let data: Record<string, any> = {};
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        data = await response.json() as Record<string, any>;
+      } catch {
+        // Empty response is fine for DELETE
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Phase/Milestone deleted successfully:\n${JSON.stringify(data, null, 2)}`,
         },
       ],
     };
@@ -1865,56 +1994,30 @@ class ZohoProjectsServer {
       await this.refreshAccessToken();
     }
 
-    // Check if this looks like a WorkDrive file ID (starts with letters like "ddfmx")
-    const isWorkDriveId = /^[a-z]/.test(attachmentId);
+    // All attachments use the standard attachments endpoint
+    // Note: Deleting attachments requires ZohoPC.files.ALL scope
+    const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
+    const url = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}/`;
 
-    if (isWorkDriveId) {
-      // Try WorkDrive API for third-party attachments
-      const workdriveUrl = `https://workdrive.zoho.com/api/v1/files/${attachmentId}`;
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
-      const response = await fetch(workdriveUrl, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new McpError(
-          ErrorCode.InternalError,
-          `Failed to delete WorkDrive attachment: ${response.status} - ${errorText}`
-        );
-      }
-
-      return {
-        content: [{ type: "text", text: `WorkDrive attachment ${attachmentId} deleted successfully.` }],
-      };
-    } else {
-      // Use REST API endpoint for standard attachments
-      const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
-      const url = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}/`;
-
-      const response = await fetch(url, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new McpError(
-          ErrorCode.InternalError,
-          `Failed to delete attachment: ${response.status} - ${errorText}`
-        );
-      }
-
-      return {
-        content: [{ type: "text", text: `Attachment ${attachmentId} deleted successfully.` }],
-      };
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to delete attachment: ${response.status} - ${errorText}. Note: Deleting attachments requires ZohoPC.files.ALL OAuth scope.`
+      );
     }
+
+    return {
+      content: [{ type: "text", text: `Attachment ${attachmentId} deleted successfully.` }],
+    };
   }
 
   // Extract inline image URLs from HTML

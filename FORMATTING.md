@@ -42,12 +42,46 @@ Zoho Projects converts newlines to `<br>` tags automatically. To avoid excessive
 
 ## Task Descriptions
 
-Same rules apply - use HTML, avoid newlines between elements.
+**IMPORTANT:** Zoho does NOT render Markdown. Always use HTML tags. Markdown syntax like `**bold**` or `- list item` will display as raw text.
 
-### Standard structure for task descriptions:
+### Required HTML Tags
+
+| Purpose | HTML Tag |
+|---------|----------|
+| Bold text | `<strong>` or `<b>` |
+| Paragraphs | `<p>` |
+| Line breaks | `<br>` |
+| Unordered lists | `<ul><li>...</li></ul>` |
+| Ordered lists | `<ol><li>...</li></ol>` |
+| Code inline | `<code>` |
+| Code blocks | `<pre>` |
+| Headings | `<h4>` |
+| Links | `<a href="...">` |
+
+### Standard Task Description Structure
 
 ```html
-<p>Opening paragraph explaining what this task does.</p><h4>What this means for you:</h4><ul><li>Benefit or outcome 1</li><li>Benefit or outcome 2</li></ul><h4>How to verify this is complete:</h4><ul><li>Verification step 1</li><li>Verification step 2</li></ul>
+<p><strong>Issue Type or Source</strong></p><p>Brief description of the problem or requirement.</p><p><strong>Details:</strong></p><ul><li>Specific detail 1</li><li>Specific detail 2</li></ul><p><strong>Actions:</strong></p><ol><li>First action to take</li><li>Second action to take</li></ol><p><strong>Expected outcome or savings</strong></p>
+```
+
+### Example - Bad (Markdown won't render)
+
+```
+**Lighthouse Issue** Legacy JavaScript polyfills are being served to modern browsers.
+
+**Actions:**
+1. Use module/nomodule pattern
+2. Configure Babel to target modern browsers
+
+**Potential savings: 340ms, 13KB**
+```
+
+This will display as raw text with asterisks showing.
+
+### Example - Good (HTML renders correctly)
+
+```html
+<p><strong>Lighthouse Issue</strong></p><p>Legacy JavaScript polyfills are being served to modern browsers.</p><p><strong>Actions:</strong></p><ol><li>Use module/nomodule pattern</li><li>Configure Babel to target modern browsers</li></ol><p><strong>Potential savings: 340ms, 13KB</strong></p>
 ```
 
 ## API Parameter Mappings
