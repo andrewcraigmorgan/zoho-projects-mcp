@@ -579,7 +579,7 @@ class ZohoProjectsServer {
         },
         {
           name: "update_phase",
-          description: "Update a phase/milestone (name, dates, owner, status)",
+          description: "Update a phase/milestone. IMPORTANT: start_date and end_date are required by the Zoho REST API for updates.",
           inputSchema: {
             type: "object",
             properties: {
@@ -1552,8 +1552,14 @@ class ZohoProjectsServer {
     const formData = new URLSearchParams();
     formData.append('name', phaseData.name || milestone.name);
     formData.append('flag', phaseData.flag || milestone.flag || 'internal');
-    // REST API expects zuid (numeric user ID), not zpuid
-    formData.append('owner', phaseData.owner_zuid || milestone.owner_id || milestone.owner?.zuid);
+
+    // REST API expects owner as string - try multiple possible field locations
+    const ownerId = phaseData.owner_zuid || milestone.owner_id || milestone.owner?.zuid || milestone.owner?.id;
+    if (ownerId) {
+      formData.append('owner', String(ownerId));
+    } else {
+      console.error('Warning: No owner ID found in milestone data:', JSON.stringify(milestone.owner || {}, null, 2));
+    }
 
     // Handle dates - convert from YYYY-MM-DD to MM-DD-YYYY
     if (phaseData.start_date) {
