@@ -572,7 +572,7 @@ class ZohoProjectsServer {
                 description: "Start date (YYYY-MM-DD)",
               },
               end_date: { type: "string", description: "End date (YYYY-MM-DD)" },
-              owner_zpuid: { type: "string", description: "Owner user ZPUID" },
+              owner_zuid: { type: "string", description: "Owner user ZUID (numeric ID from list_users)" },
             },
             required: ["project_id", "name"],
           },
@@ -591,7 +591,7 @@ class ZohoProjectsServer {
                 description: "Start date (YYYY-MM-DD)",
               },
               end_date: { type: "string", description: "End date (YYYY-MM-DD)" },
-              owner_zpuid: { type: "string", description: "Owner user ZPUID" },
+              owner_zuid: { type: "string", description: "Owner user ZUID (numeric ID from list_users)" },
               status: {
                 type: "string",
                 description: "Phase status",
@@ -1552,7 +1552,8 @@ class ZohoProjectsServer {
     const formData = new URLSearchParams();
     formData.append('name', phaseData.name || milestone.name);
     formData.append('flag', phaseData.flag || milestone.flag || 'internal');
-    formData.append('owner', phaseData.owner_zpuid || milestone.owner_id || milestone.owner?.id);
+    // REST API expects zuid (numeric user ID), not zpuid
+    formData.append('owner', phaseData.owner_zuid || milestone.owner_id || milestone.owner?.zuid);
 
     // Handle dates - convert from YYYY-MM-DD to MM-DD-YYYY
     if (phaseData.start_date) {
