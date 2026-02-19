@@ -398,6 +398,10 @@ class ZohoProjectsServer {
                 type: "number",
                 description: "Estimated work hours for the task (e.g., 2 for 2 hours, 1.5 for 1.5 hours)",
               },
+              assignee_zpuid: {
+                type: "string",
+                description: "Assignee user ZPUID (from list_users)",
+              },
             },
             required: ["project_id", "task_id"],
           },
@@ -1226,10 +1230,16 @@ class ZohoProjectsServer {
   }
 
   private async createTask(params: any) {
-    const { project_id, tasklist_id, ...taskData } = params;
+    const { project_id, tasklist_id, assignee_zpuid, ...taskData } = params;
     // Map tasklist_id to tasklist for the API
     if (tasklist_id) {
       taskData.tasklist = { id: tasklist_id };
+    }
+    // Map assignee_zpuid to owners_and_work.owners for the v3 API
+    if (assignee_zpuid) {
+      taskData.owners_and_work = {
+        owners: [{ zpuid: assignee_zpuid }]
+      };
     }
     // Convert duration to object format expected by API (HH:MM format for hours)
     if (taskData.duration !== undefined) {
@@ -1259,7 +1269,7 @@ class ZohoProjectsServer {
   }
 
   private async updateTask(params: any) {
-    const { project_id, task_id, status_id, tasklist_id, ...taskData } = params;
+    const { project_id, task_id, status_id, tasklist_id, assignee_zpuid, ...taskData } = params;
     // Map status_id to status for the API
     if (status_id) {
       taskData.status = { id: status_id };
@@ -1267,6 +1277,12 @@ class ZohoProjectsServer {
     // Map tasklist_id to tasklist for the API
     if (tasklist_id) {
       taskData.tasklist = { id: tasklist_id };
+    }
+    // Map assignee_zpuid to owners_and_work.owners for the v3 API
+    if (assignee_zpuid) {
+      taskData.owners_and_work = {
+        owners: [{ zpuid: assignee_zpuid }]
+      };
     }
     // Convert duration to object format expected by API (HH:MM format for hours)
     if (taskData.duration !== undefined) {

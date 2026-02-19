@@ -94,6 +94,7 @@ Some Zoho API parameters require nested object format:
 | `tasklist_id` (update_task) | `{ tasklist: { id: value } }` |
 | `milestone_id` (create_tasklist) | `{ milestone: { id: value } }` |
 | `target_tasklist_id` (move_task) | Direct value |
+| `assignee_zpuid` (create/update_task) | `{ owners_and_work: { owners: [{ zpuid: value }] } }` |
 
 ## Empty Response Handling
 
