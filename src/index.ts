@@ -250,7 +250,9 @@ async function zohoRequest(
     throw new Error(`Zoho API error (${response.status}): ${error}`);
   }
 
-  return response.json();
+  const text = await response.text();
+  if (!text) return {};
+  return JSON.parse(text);
 }
 
 // Make authenticated API request to Zoho API v3 (JSON)
@@ -285,7 +287,9 @@ async function zohoRequestV3(
     throw new Error(`Zoho API error (${response.status}): ${error}`);
   }
 
-  return response.json();
+  const text = await response.text();
+  if (!text) return {};
+  return JSON.parse(text);
 }
 
 // Tool definitions - descriptions minimized to reduce context overhead
