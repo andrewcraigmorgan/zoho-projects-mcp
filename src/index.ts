@@ -44,13 +44,14 @@ const FALLBACK_TASK_STATUSES = [
 // May be revisited in the future when API strategies are confirmed working.
 
 // Slim response transformers - reduce context usage by returning only essential fields
+// Note: Always prefer id_string over id — Zoho's numeric IDs exceed JS safe integer precision
 function slimPortalResponse(raw: unknown, slim: boolean): unknown {
   if (!slim) return raw;
   const data = raw as { portals?: Array<Record<string, unknown>> };
   return {
     portals:
       data.portals?.map((p) => ({
-        id: p.id,
+        id: p.id_string ?? p.id,
         name: p.name,
         is_default: p.is_default,
       })) || [],
@@ -63,7 +64,7 @@ function slimProjectResponse(raw: unknown, slim: boolean): unknown {
   return {
     projects:
       data.projects?.map((p) => ({
-        id: p.id,
+        id: p.id_string ?? p.id,
         name: p.name,
         status: p.status,
         owner_name: p.owner_name,
@@ -79,7 +80,7 @@ function slimTaskResponse(raw: unknown, slim: boolean): unknown {
   return {
     tasks:
       data.tasks?.map((t) => ({
-        id: t.id,
+        id: t.id_string ?? t.id,
         name: t.name,
         status: t.status,
         priority: t.priority,
@@ -101,7 +102,7 @@ function slimSingleTaskResponse(raw: unknown, slim: boolean): unknown {
   if (!t) return raw;
   return {
     task: {
-      id: t.id,
+      id: t.id_string ?? t.id,
       name: t.name,
       description: (t.details as Record<string, unknown>)?.description,
       status: t.status,
@@ -121,7 +122,7 @@ function slimCommentResponse(raw: unknown, slim: boolean): unknown {
   return {
     comments:
       data.comments?.map((c) => ({
-        id: c.id,
+        id: c.id_string ?? c.id,
         content: c.content,
         author: (c.added_by as Record<string, unknown>)?.name,
         created_time: c.created_time,
@@ -136,9 +137,11 @@ function slimTasklistResponse(raw: unknown, slim: boolean): unknown {
   return {
     tasklists:
       data.tasklists?.map((tl) => ({
-        id: tl.id,
+        id: tl.id_string ?? tl.id,
         name: tl.name,
-        milestone_id: (tl.milestone as Record<string, unknown>)?.id,
+        milestone_id: (tl.milestone as Record<string, unknown>)
+          ? ((tl.milestone as Record<string, unknown>).id_string ?? (tl.milestone as Record<string, unknown>).id)
+          : undefined,
         visibility: tl.flag, // 'external' or 'internal'
       })) || [],
   };
@@ -150,7 +153,7 @@ function slimUserResponse(raw: unknown, slim: boolean): unknown {
   return {
     users:
       data.users?.map((u) => ({
-        id: u.id,
+        id: u.id_string ?? u.id,
         name: u.name,
         email: u.email,
         role: u.role,
@@ -164,7 +167,7 @@ function slimMyTasksResponse(raw: unknown, slim: boolean): unknown {
   return {
     tasks:
       data.tasks?.map((t) => ({
-        id: t.id,
+        id: t.id_string ?? t.id,
         name: t.name,
         project_name: (t.project as Record<string, unknown>)?.name,
         status: t.status,
@@ -383,6 +386,22 @@ const tools: Tool[] = [
         raw: { type: "boolean", description: "Return full API response", default: false },
       },
       required: ["portal_id", "project_id"],
+    },
+  },
+  {
+    name: "list_subtasks",
+    description: "List subtasks of a task.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        portal_id: { type: "string", description: "Portal ID" },
+        project_id: { type: "string", description: "Project ID" },
+        task_id: { type: "string", description: "Parent task ID" },
+        index: { type: "number", description: "Pagination start index", default: 0 },
+        range: { type: "number", description: "Items to retrieve", default: 100 },
+        raw: { type: "boolean", description: "Return full API response", default: false },
+      },
+      required: ["portal_id", "project_id", "task_id"],
     },
   },
   {
@@ -695,6 +714,24 @@ async function handleListTasks(args: {
   return slimTaskResponse(result, !(args.raw ?? false));
 }
 
+async function handleListSubtasks(args: {
+  portal_id: string;
+  project_id: string;
+  task_id: string;
+  index?: number;
+  range?: number;
+  raw?: boolean;
+}): Promise<unknown> {
+  const params = new URLSearchParams();
+  params.set("index", String(args.index ?? 0));
+  params.set("range", String(args.range ?? 100));
+
+  const result = await zohoRequest(
+    `/portal/${args.portal_id}/projects/${args.project_id}/tasks/${args.task_id}/subtasks/?${params.toString()}`
+  );
+  return slimTaskResponse(result, !(args.raw ?? false));
+}
+
 async function handleListTaskStatuses(_args: {
   portal_id: string;
   project_id: string;
@@ -1001,7 +1038,7 @@ const server = new Server(
       tools: {},
     },
     // Note: Use HTML formatting (not Markdown) for task descriptions and comments
-    instructions: "Use HTML formatting for descriptions/comments (not Markdown).",
+    instructions: "Use HTML formatting for descriptions/comments (not Markdown). Tasks may have subtasks — use list_subtasks to check before updating or closing a parent task. Subtasks are regular tasks: use update_task/update_task_status with the subtask ID to modify them.",
   }
 );
 
@@ -1050,6 +1087,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "list_tasks":
         result = await handleListTasks(
           args as Parameters<typeof handleListTasks>[0]
+        );
+        break;
+      case "list_subtasks":
+        result = await handleListSubtasks(
+          args as Parameters<typeof handleListSubtasks>[0]
         );
         break;
       case "list_task_statuses":
