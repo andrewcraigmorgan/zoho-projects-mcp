@@ -58,9 +58,10 @@ function slimPortalResponse(raw: unknown, slim: boolean): unknown {
   };
 }
 
-function slimProjectResponse(raw: unknown, slim: boolean): unknown {
-  if (!slim) return raw;
+function slimProjectResponse(raw: unknown, slim: boolean, range: number): unknown {
   const data = raw as { projects?: Array<Record<string, unknown>> };
+  const has_more = (data.projects?.length ?? 0) >= range;
+  if (!slim) return { ...(data as Record<string, unknown>), has_more };
   return {
     projects:
       data.projects?.map((p) => ({
@@ -70,13 +71,14 @@ function slimProjectResponse(raw: unknown, slim: boolean): unknown {
         owner_name: p.owner_name,
         open_task_count: (p.task_count as Record<string, unknown>)?.open,
       })) || [],
-    has_more: !!data.projects?.length,
+    has_more,
   };
 }
 
-function slimTaskResponse(raw: unknown, slim: boolean): unknown {
-  if (!slim) return raw;
+function slimTaskResponse(raw: unknown, slim: boolean, range: number): unknown {
   const data = raw as { tasks?: Array<Record<string, unknown>> };
+  const has_more = (data.tasks?.length ?? 0) >= range;
+  if (!slim) return { ...(data as Record<string, unknown>), has_more };
   return {
     tasks:
       data.tasks?.map((t) => ({
@@ -91,7 +93,7 @@ function slimTaskResponse(raw: unknown, slim: boolean): unknown {
           ? ((t.details as Record<string, unknown>).owners as Array<Record<string, unknown>>)?.[0]?.name
           : undefined,
       })) || [],
-    has_more: !!data.tasks?.length,
+    has_more,
   };
 }
 
@@ -116,9 +118,10 @@ function slimSingleTaskResponse(raw: unknown, slim: boolean): unknown {
   };
 }
 
-function slimCommentResponse(raw: unknown, slim: boolean): unknown {
-  if (!slim) return raw;
+function slimCommentResponse(raw: unknown, slim: boolean, range: number): unknown {
   const data = raw as { comments?: Array<Record<string, unknown>> };
+  const has_more = (data.comments?.length ?? 0) >= range;
+  if (!slim) return { ...(data as Record<string, unknown>), has_more };
   return {
     comments:
       data.comments?.map((c) => ({
@@ -127,7 +130,7 @@ function slimCommentResponse(raw: unknown, slim: boolean): unknown {
         author: (c.added_by as Record<string, unknown>)?.name,
         created_time: c.created_time,
       })) || [],
-    has_more: !!data.comments?.length,
+    has_more,
   };
 }
 
@@ -161,9 +164,10 @@ function slimUserResponse(raw: unknown, slim: boolean): unknown {
   };
 }
 
-function slimMyTasksResponse(raw: unknown, slim: boolean): unknown {
-  if (!slim) return raw;
+function slimMyTasksResponse(raw: unknown, slim: boolean, range: number): unknown {
   const data = raw as { tasks?: Array<Record<string, unknown>> };
+  const has_more = (data.tasks?.length ?? 0) >= range;
+  if (!slim) return { ...(data as Record<string, unknown>), has_more };
   return {
     tasks:
       data.tasks?.map((t) => ({
@@ -174,7 +178,7 @@ function slimMyTasksResponse(raw: unknown, slim: boolean): unknown {
         priority: t.priority,
         end_date: t.end_date,
       })) || [],
-    has_more: !!data.tasks?.length,
+    has_more,
   };
 }
 
@@ -295,8 +299,8 @@ const tools: Tool[] = [
         portal_id: { type: "string", description: "Portal ID" },
         project_id: { type: "string", description: "Project ID" },
         task_id: { type: "string", description: "Task ID" },
-        index: { type: "number", description: "Pagination start index", default: 0 },
-        range: { type: "number", description: "Items to retrieve", default: 100 },
+        index: { type: "number", description: "Pagination start index (record offset, not page number)", default: 0 },
+        range: { type: "number", description: "Items to retrieve", default: 100, minimum: 1 },
         sort_column: { type: "string", enum: ["created_time", "last_modified_time"], default: "created_time" },
         sort_order: { type: "string", enum: ["ascending", "descending"], default: "descending" },
         raw: { type: "boolean", description: "Return full API response", default: false },
@@ -365,8 +369,8 @@ const tools: Tool[] = [
       type: "object",
       properties: {
         portal_id: { type: "string", description: "Portal ID" },
-        index: { type: "number", description: "Pagination start index", default: 0 },
-        range: { type: "number", description: "Items to retrieve", default: 100 },
+        index: { type: "number", description: "Pagination start index (record offset, not page number)", default: 0 },
+        range: { type: "number", description: "Items to retrieve", default: 100, minimum: 1 },
         status: { type: "string", enum: ["active", "archived", "template"] },
         raw: { type: "boolean", description: "Return full API response", default: false },
       },
@@ -381,8 +385,8 @@ const tools: Tool[] = [
       properties: {
         portal_id: { type: "string", description: "Portal ID" },
         project_id: { type: "string", description: "Project ID" },
-        index: { type: "number", description: "Pagination start index", default: 0 },
-        range: { type: "number", description: "Items to retrieve", default: 100 },
+        index: { type: "number", description: "Pagination start index (record offset, not page number)", default: 0 },
+        range: { type: "number", description: "Items to retrieve", default: 100, minimum: 1 },
         raw: { type: "boolean", description: "Return full API response", default: false },
       },
       required: ["portal_id", "project_id"],
@@ -397,8 +401,8 @@ const tools: Tool[] = [
         portal_id: { type: "string", description: "Portal ID" },
         project_id: { type: "string", description: "Project ID" },
         task_id: { type: "string", description: "Parent task ID" },
-        index: { type: "number", description: "Pagination start index", default: 0 },
-        range: { type: "number", description: "Items to retrieve", default: 100 },
+        index: { type: "number", description: "Pagination start index (record offset, not page number)", default: 0 },
+        range: { type: "number", description: "Items to retrieve", default: 100, minimum: 1 },
         raw: { type: "boolean", description: "Return full API response", default: false },
       },
       required: ["portal_id", "project_id", "task_id"],
@@ -560,8 +564,8 @@ const tools: Tool[] = [
       type: "object",
       properties: {
         portal_id: { type: "string", description: "Portal ID" },
-        index: { type: "number", description: "Pagination start index", default: 0 },
-        range: { type: "number", description: "Items to retrieve", default: 100 },
+        index: { type: "number", description: "Pagination start index (record offset, not page number)", default: 0 },
+        range: { type: "number", description: "Items to retrieve", default: 100, minimum: 1 },
         raw: { type: "boolean", description: "Return full API response", default: false },
       },
       required: ["portal_id"],
@@ -611,16 +615,17 @@ async function handleListTaskComments(args: {
   sort_order?: string;
   raw?: boolean;
 }): Promise<unknown> {
+  const range = args.range ?? 100;
   const params = new URLSearchParams();
   params.set("index", String(args.index ?? 0));
-  params.set("range", String(args.range ?? 100));
+  params.set("range", String(range));
   if (args.sort_column) params.set("sort_column", args.sort_column);
   if (args.sort_order) params.set("sort_order", args.sort_order);
 
   const result = await zohoRequest(
     `/portal/${args.portal_id}/projects/${args.project_id}/tasks/${args.task_id}/comments/?${params.toString()}`
   );
-  return slimCommentResponse(result, !(args.raw ?? false));
+  return slimCommentResponse(result, !(args.raw ?? false), range);
 }
 
 async function handleAddTaskComment(args: {
@@ -686,15 +691,16 @@ async function handleListProjects(args: {
   status?: string;
   raw?: boolean;
 }): Promise<unknown> {
+  const range = args.range ?? 100;
   const params = new URLSearchParams();
   params.set("index", String(args.index ?? 0));
-  params.set("range", String(args.range ?? 100));
+  params.set("range", String(range));
   if (args.status) params.set("status", args.status);
 
   const result = await zohoRequest(
     `/portal/${args.portal_id}/projects/?${params.toString()}`
   );
-  return slimProjectResponse(result, !(args.raw ?? false));
+  return slimProjectResponse(result, !(args.raw ?? false), range);
 }
 
 async function handleListTasks(args: {
@@ -704,14 +710,15 @@ async function handleListTasks(args: {
   range?: number;
   raw?: boolean;
 }): Promise<unknown> {
+  const range = args.range ?? 100;
   const params = new URLSearchParams();
   params.set("index", String(args.index ?? 0));
-  params.set("range", String(args.range ?? 100));
+  params.set("range", String(range));
 
   const result = await zohoRequest(
     `/portal/${args.portal_id}/projects/${args.project_id}/tasks/?${params.toString()}`
   );
-  return slimTaskResponse(result, !(args.raw ?? false));
+  return slimTaskResponse(result, !(args.raw ?? false), range);
 }
 
 async function handleListSubtasks(args: {
@@ -722,14 +729,15 @@ async function handleListSubtasks(args: {
   range?: number;
   raw?: boolean;
 }): Promise<unknown> {
+  const range = args.range ?? 100;
   const params = new URLSearchParams();
   params.set("index", String(args.index ?? 0));
-  params.set("range", String(args.range ?? 100));
+  params.set("range", String(range));
 
   const result = await zohoRequest(
     `/portal/${args.portal_id}/projects/${args.project_id}/tasks/${args.task_id}/subtasks/?${params.toString()}`
   );
-  return slimTaskResponse(result, !(args.raw ?? false));
+  return slimTaskResponse(result, !(args.raw ?? false), range);
 }
 
 async function handleListTaskStatuses(_args: {
@@ -952,14 +960,15 @@ async function handleGetMyTasks(args: {
   range?: number;
   raw?: boolean;
 }): Promise<unknown> {
+  const range = args.range ?? 100;
   const params = new URLSearchParams();
   params.set("index", String(args.index ?? 0));
-  params.set("range", String(args.range ?? 100));
+  params.set("range", String(range));
 
   const result = await zohoRequest(
     `/portal/${args.portal_id}/mytasks/?${params.toString()}`
   );
-  return slimMyTasksResponse(result, !(args.raw ?? false));
+  return slimMyTasksResponse(result, !(args.raw ?? false), range);
 }
 
 async function handleAssignTask(args: {
@@ -1038,7 +1047,7 @@ const server = new Server(
       tools: {},
     },
     // Note: Use HTML formatting (not Markdown) for task descriptions and comments
-    instructions: "Use HTML formatting for descriptions/comments (not Markdown). Tasks may have subtasks — use list_subtasks to check before updating or closing a parent task. Subtasks are regular tasks: use update_task/update_task_status with the subtask ID to modify them.",
+    instructions: "Use HTML formatting for descriptions/comments (not Markdown). Tasks may have subtasks — use list_subtasks to check before updating or closing a parent task. Subtasks are regular tasks: use update_task/update_task_status with the subtask ID to modify them. Paginated endpoints return has_more: true/false — to get the next page, set index to index + range (index is a record offset, not a page number). Stop paginating when has_more is false.",
   }
 );
 
