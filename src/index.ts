@@ -563,19 +563,6 @@ class ZohoProjectsServer {
           },
         },
         {
-          name: "convert_to_subtask",
-          description: "Convert an existing task to a subtask of another task",
-          inputSchema: {
-            type: "object",
-            properties: {
-              project_id: { type: "string", description: "Project ID" },
-              parent_task_id: { type: "string", description: "Parent task ID" },
-              task_id: { type: "string", description: "Task ID to convert to subtask" },
-            },
-            required: ["project_id", "parent_task_id", "task_id"],
-          },
-        },
-        {
           name: "add_task_dependency",
           description: "Add a dependency between two tasks (predecessor/successor relationship)",
           inputSchema: {
@@ -1057,8 +1044,6 @@ class ZohoProjectsServer {
             return await this.listSubtasks(params.project_id, params.task_id, params.index, params.range);
           case "create_subtask":
             return await this.createSubtask(params);
-          case "convert_to_subtask":
-            return await this.convertToSubtask(params.project_id, params.parent_task_id, params.task_id);
           case "add_task_dependency":
             return await this.addTaskDependency(params.project_id, params.task_id, params.predecessor_id, params.dependency_type, params.lag_value, params.lag_type);
 
@@ -1717,42 +1702,6 @@ class ZohoProjectsServer {
         {
           type: "text",
           text: `Subtask created successfully:\n${JSON.stringify(data, null, 2)}`,
-        },
-      ],
-    };
-  }
-
-  private async convertToSubtask(projectId: string, parentTaskId: string, taskId: string) {
-    // Use REST API to convert existing task to subtask by setting subtask_of
-    const restDomain = this.config.apiDomain?.replace('projectsapi', 'projectsapi') || 'https://projectsapi.zoho.com';
-    const endpoint = `${restDomain}/restapi/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/`;
-
-    const body = new URLSearchParams();
-    body.set("subtask_of", parentTaskId);
-
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Zoho-oauthtoken ${this.config.accessToken}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: body.toString(),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to convert task to subtask: ${response.status} - ${error}`
-      );
-    }
-
-    const data = await response.json();
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Task converted to subtask successfully:\n${JSON.stringify(data, null, 2)}`,
         },
       ],
     };
