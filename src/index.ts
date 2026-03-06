@@ -1723,9 +1723,12 @@ class ZohoProjectsServer {
   }
 
   private async convertToSubtask(projectId: string, parentTaskId: string, taskId: string) {
-    // Use REST API to convert existing task to subtask
+    // Use REST API to convert existing task to subtask by setting subtask_of
     const restDomain = this.config.apiDomain?.replace('projectsapi', 'projectsapi') || 'https://projectsapi.zoho.com';
-    const endpoint = `${restDomain}/restapi/portal/${this.config.portalId}/projects/${projectId}/tasks/${parentTaskId}/subtasks/${taskId}/`;
+    const endpoint = `${restDomain}/restapi/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/`;
+
+    const body = new URLSearchParams();
+    body.set("subtask_of", parentTaskId);
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -1733,6 +1736,7 @@ class ZohoProjectsServer {
         Authorization: `Zoho-oauthtoken ${this.config.accessToken}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
+      body: body.toString(),
     });
 
     if (!response.ok) {
