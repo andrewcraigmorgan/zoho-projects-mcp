@@ -402,8 +402,24 @@ class ZohoProjectsServer {
                 type: "string",
                 description: "Assignee user ZPUID (from list_users)",
               },
+              tag_ids: {
+                type: "array",
+                items: { type: "string" },
+                description: "Array of tag IDs to set on the task. Use empty array [] to remove all tags. Get tag IDs from list_tags.",
+              },
             },
             required: ["project_id", "task_id"],
+          },
+        },
+        {
+          name: "list_tags",
+          description: "List all available tags for a project",
+          inputSchema: {
+            type: "object",
+            properties: {
+              project_id: { type: "string", description: "Project ID" },
+            },
+            required: ["project_id"],
           },
         },
         {
@@ -471,6 +487,74 @@ class ZohoProjectsServer {
               tasklist_id: { type: "string", description: "Tasklist ID to delete" },
             },
             required: ["project_id", "tasklist_id"],
+          },
+        },
+        {
+          name: "update_tasklist",
+          description: "Update a tasklist name or visibility",
+          inputSchema: {
+            type: "object",
+            properties: {
+              project_id: { type: "string", description: "Project ID" },
+              tasklist_id: { type: "string", description: "Tasklist ID to update" },
+              name: { type: "string", description: "New tasklist name" },
+              flag: {
+                type: "string",
+                description: "Tasklist visibility: 'external' (visible to clients) or 'internal' (team only)",
+                enum: ["internal", "external"],
+              },
+            },
+            required: ["project_id", "tasklist_id"],
+          },
+        },
+        {
+          name: "list_subtasks",
+          description: "List subtasks of a parent task",
+          inputSchema: {
+            type: "object",
+            properties: {
+              project_id: { type: "string", description: "Project ID" },
+              task_id: { type: "string", description: "Parent task ID" },
+              index: {
+                type: "number",
+                description: "Starting index for pagination (record offset, not page number)",
+                default: 0,
+              },
+              range: {
+                type: "number",
+                description: "Number of subtasks to retrieve",
+                default: 100,
+              },
+            },
+            required: ["project_id", "task_id"],
+          },
+        },
+        {
+          name: "add_task_dependency",
+          description: "Add a dependency between two tasks (predecessor/successor relationship)",
+          inputSchema: {
+            type: "object",
+            properties: {
+              project_id: { type: "string", description: "Project ID" },
+              task_id: { type: "string", description: "Successor task ID (the task that depends on another)" },
+              predecessor_id: { type: "string", description: "Predecessor task ID (the task that must complete first)" },
+              dependency_type: {
+                type: "string",
+                description: "Type of dependency",
+                enum: ["FS", "SS", "SF", "FF"],
+                default: "FS",
+              },
+              lag_value: {
+                type: "number",
+                description: "Lag time between tasks",
+              },
+              lag_type: {
+                type: "string",
+                description: "Unit for lag time",
+                enum: ["days", "hours"],
+              },
+            },
+            required: ["project_id", "task_id", "predecessor_id"],
           },
         },
 
@@ -667,6 +751,25 @@ class ZohoProjectsServer {
               project_id: {
                 type: "string",
                 description: "Project ID (optional for portal-level)",
+              },
+            },
+          },
+        },
+        {
+          name: "get_my_tasks",
+          description: "Get tasks assigned to the current user across all projects in the portal",
+          inputSchema: {
+            type: "object",
+            properties: {
+              index: {
+                type: "number",
+                description: "Starting index for pagination (record offset, not page number)",
+                default: 0,
+              },
+              range: {
+                type: "number",
+                description: "Number of tasks to retrieve",
+                default: 100,
               },
             },
           },
@@ -902,6 +1005,12 @@ class ZohoProjectsServer {
             return await this.moveTask(params.project_id, params.task_id, params.tasklist_id);
           case "delete_tasklist":
             return await this.deleteTasklist(params.project_id, params.tasklist_id);
+          case "update_tasklist":
+            return await this.updateTasklist(params.project_id, params.tasklist_id, params.name, params.flag);
+          case "list_subtasks":
+            return await this.listSubtasks(params.project_id, params.task_id, params.index, params.range);
+          case "add_task_dependency":
+            return await this.addTaskDependency(params.project_id, params.task_id, params.predecessor_id, params.dependency_type, params.lag_value, params.lag_type);
 
           // Issue operations
           case "list_issues":
@@ -930,10 +1039,16 @@ class ZohoProjectsServer {
           // Users
           case "list_users":
             return await this.listUsers(params.project_id);
+          case "get_my_tasks":
+            return await this.getMyTasks(params.index, params.range);
 
           // Task Statuses
           case "list_statuses":
             return await this.listStatuses(params.project_id);
+
+          // Tags
+          case "list_tags":
+            return await this.listTags(params.project_id);
 
           // Task Comments
           case "list_task_comments":
@@ -1269,7 +1384,7 @@ class ZohoProjectsServer {
   }
 
   private async updateTask(params: any) {
-    const { project_id, task_id, status_id, tasklist_id, assignee_zpuid, ...taskData } = params;
+    const { project_id, task_id, status_id, tasklist_id, assignee_zpuid, tag_ids, ...taskData } = params;
     // Map status_id to status for the API
     if (status_id) {
       taskData.status = { id: status_id };
@@ -1283,6 +1398,10 @@ class ZohoProjectsServer {
       taskData.owners_and_work = {
         owners: [{ zpuid: assignee_zpuid }]
       };
+    }
+    // Map tag_ids to tags array for the API
+    if (tag_ids !== undefined) {
+      taskData.tags = tag_ids.map((id: string) => ({ id }));
     }
     // Convert duration to object format expected by API (HH:MM format for hours)
     if (taskData.duration !== undefined) {
@@ -1426,6 +1545,125 @@ class ZohoProjectsServer {
         {
           type: "text",
           text: `Tasklist deleted successfully:\n${JSON.stringify(data, null, 2)}`,
+        },
+      ],
+    };
+  }
+
+  private async updateTasklist(projectId: string, tasklistId: string, name?: string, flag?: string) {
+    if (!name && !flag) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        "Provide at least one of name or flag to update the tasklist"
+      );
+    }
+
+    const payload: Record<string, unknown> = {};
+    if (name) payload.name = name;
+    if (flag) payload.flag = flag;
+
+    const data = await this.makeRequest(
+      `/portal/${this.config.portalId}/projects/${projectId}/tasklists/${tasklistId}`,
+      "PATCH",
+      payload
+    );
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Tasklist updated successfully:\n${JSON.stringify(data, null, 2)}`,
+        },
+      ],
+    };
+  }
+
+  private async listSubtasks(projectId: string, taskId: string, index: number = 0, range: number = 100) {
+    // Use REST API for subtasks
+    const restDomain = this.config.apiDomain?.replace('projectsapi', 'projectsapi') || 'https://projectsapi.zoho.com';
+    const endpoint = `${restDomain}/restapi/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/subtasks/?index=${index}&range=${range}`;
+
+    const response = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        Authorization: `Zoho-oauthtoken ${this.config.accessToken}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to list subtasks: ${response.status} - ${error}`
+      );
+    }
+
+    const data = await response.json() as Record<string, unknown>;
+    const tasks = data.tasks as unknown[] | undefined;
+    const hasMore = (tasks?.length ?? 0) >= range;
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ ...data, has_more: hasMore }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async addTaskDependency(
+    projectId: string,
+    taskId: string,
+    predecessorId: string,
+    dependencyType: string = "FS",
+    lagValue?: number,
+    lagType?: string
+  ) {
+    // Use REST API for task dependencies
+    const restDomain = this.config.apiDomain?.replace('projectsapi', 'projectsapi') || 'https://projectsapi.zoho.com';
+    const endpoint = `${restDomain}/restapi/portal/${this.config.portalId}/projects/${projectId}/taskdependency/`;
+
+    const body = new URLSearchParams();
+    body.set("taskid", taskId);
+    body.set("projId", projectId);
+    body.set("toupdate", "dependencyset");
+    body.set("predids", predecessorId);
+    body.set("childprojId", projectId);
+
+    if (dependencyType) {
+      body.set("dependencytype", dependencyType);
+    }
+    if (lagValue !== undefined) {
+      body.set("gapvalue", String(lagValue));
+    }
+    if (lagType) {
+      body.set("gaptype", lagType);
+    }
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Zoho-oauthtoken ${this.config.accessToken}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: body.toString(),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to add task dependency: ${response.status} - ${error}`
+      );
+    }
+
+    const data = await response.json();
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Task dependency added successfully:\n${JSON.stringify(data, null, 2)}`,
         },
       ],
     };
@@ -1717,6 +1955,41 @@ class ZohoProjectsServer {
     };
   }
 
+  private async getMyTasks(index: number = 0, range: number = 100) {
+    // Use REST API for my tasks
+    const restDomain = this.config.apiDomain?.replace('projectsapi', 'projectsapi') || 'https://projectsapi.zoho.com';
+    const endpoint = `${restDomain}/restapi/portal/${this.config.portalId}/mytasks/?index=${index}&range=${range}`;
+
+    const response = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        Authorization: `Zoho-oauthtoken ${this.config.accessToken}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to get my tasks: ${response.status} - ${error}`
+      );
+    }
+
+    const data = await response.json() as Record<string, unknown>;
+    const tasks = data.tasks as unknown[] | undefined;
+    const hasMore = (tasks?.length ?? 0) >= range;
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ ...data, has_more: hasMore }, null, 2),
+        },
+      ],
+    };
+  }
+
   // Task Statuses
   private async listStatuses(projectId: string) {
     // Try the fields endpoint to get status field options
@@ -1757,6 +2030,16 @@ class ZohoProjectsServer {
         }, null, 2) }],
       };
     }
+  }
+
+  // Tags
+  private async listTags(projectId: string) {
+    const data = await this.makeRequest(
+      `/portal/${this.config.portalId}/projects/${projectId}/tags`
+    );
+    return {
+      content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    };
   }
 
   // Task Comments
