@@ -530,6 +530,39 @@ class ZohoProjectsServer {
           },
         },
         {
+          name: "create_subtask",
+          description: "Create a subtask under a parent task",
+          inputSchema: {
+            type: "object",
+            properties: {
+              project_id: { type: "string", description: "Project ID" },
+              parent_task_id: { type: "string", description: "Parent task ID to create subtask under" },
+              name: { type: "string", description: "Subtask name" },
+              description: {
+                type: "string",
+                description: "Subtask description. Use HTML formatting (not Markdown).",
+              },
+              priority: {
+                type: "string",
+                description: "Subtask priority",
+                enum: ["None", "Low", "Medium", "High"],
+              },
+              start_date: { type: "string", description: "Start date (MM-DD-YYYY)" },
+              end_date: { type: "string", description: "End date (MM-DD-YYYY)" },
+              duration: {
+                type: "number",
+                description: "Estimated work hours (e.g., 2 for 2 hours, 1.5 for 1.5 hours)",
+              },
+              owner_ids: {
+                type: "array",
+                items: { type: "string" },
+                description: "Array of user IDs to assign",
+              },
+            },
+            required: ["project_id", "parent_task_id", "name"],
+          },
+        },
+        {
           name: "add_task_dependency",
           description: "Add a dependency between two tasks (predecessor/successor relationship)",
           inputSchema: {
@@ -1009,6 +1042,8 @@ class ZohoProjectsServer {
             return await this.updateTasklist(params.project_id, params.tasklist_id, params.name, params.flag);
           case "list_subtasks":
             return await this.listSubtasks(params.project_id, params.task_id, params.index, params.range);
+          case "create_subtask":
+            return await this.createSubtask(params);
           case "add_task_dependency":
             return await this.addTaskDependency(params.project_id, params.task_id, params.predecessor_id, params.dependency_type, params.lag_value, params.lag_type);
 
@@ -1607,6 +1642,66 @@ class ZohoProjectsServer {
         {
           type: "text",
           text: JSON.stringify({ ...data, has_more: hasMore }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async createSubtask(params: {
+    project_id: string;
+    parent_task_id: string;
+    name: string;
+    description?: string;
+    priority?: string;
+    start_date?: string;
+    end_date?: string;
+    duration?: number;
+    owner_ids?: string[];
+  }) {
+    // Use REST API for creating subtasks
+    const restDomain = this.config.apiDomain?.replace('projectsapi', 'projectsapi') || 'https://projectsapi.zoho.com';
+    const endpoint = `${restDomain}/restapi/portal/${this.config.portalId}/projects/${params.project_id}/tasks/${params.parent_task_id}/subtasks/`;
+
+    const body = new URLSearchParams();
+    body.set("name", params.name);
+    if (params.description) body.set("description", params.description);
+    if (params.priority) body.set("priority", params.priority);
+    if (params.start_date) body.set("start_date", params.start_date);
+    if (params.end_date) body.set("end_date", params.end_date);
+    if (params.duration !== undefined) {
+      // Convert hours to HH:MM format
+      const hours = Math.floor(params.duration);
+      const minutes = Math.round((params.duration - hours) * 60);
+      body.set("duration", `${hours}:${minutes.toString().padStart(2, '0')}`);
+      body.set("duration_type", "hrs");
+    }
+    if (params.owner_ids && params.owner_ids.length > 0) {
+      body.set("person_responsible", params.owner_ids.join(","));
+    }
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Zoho-oauthtoken ${this.config.accessToken}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: body.toString(),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to create subtask: ${response.status} - ${error}`
+      );
+    }
+
+    const data = await response.json();
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Subtask created successfully:\n${JSON.stringify(data, null, 2)}`,
         },
       ],
     };
