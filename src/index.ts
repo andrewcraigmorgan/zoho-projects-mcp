@@ -993,7 +993,7 @@ class ZohoProjectsServer {
   // Project operations
   private async listProjects(page: number = 1, perPage: number = 10) {
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects?page=${page}&per_page=${perPage}`
+      `/portal/${this.config.portalName}/projects?page=${page}&per_page=${perPage}`
     );
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
@@ -1002,7 +1002,7 @@ class ZohoProjectsServer {
 
   private async getProject(projectId: string) {
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}`
+      `/portal/${this.config.portalName}/projects/${projectId}`
     );
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
@@ -1011,7 +1011,7 @@ class ZohoProjectsServer {
 
   private async createProject(params: any) {
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects`,
+      `/portal/${this.config.portalName}/projects`,
       "POST",
       params
     );
@@ -1028,7 +1028,7 @@ class ZohoProjectsServer {
   private async updateProject(params: any) {
     const { project_id, ...updateData } = params;
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${project_id}`,
+      `/portal/${this.config.portalName}/projects/${project_id}`,
       "PATCH",
       updateData
     );
@@ -1044,7 +1044,7 @@ class ZohoProjectsServer {
 
   private async deleteProject(projectId: string) {
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}/trash`,
+      `/portal/${this.config.portalName}/projects/${projectId}/trash`,
       "POST"
     );
     return {
@@ -1064,8 +1064,8 @@ class ZohoProjectsServer {
     perPage: number = 10
   ) {
     const endpoint = projectId
-      ? `/portal/${this.config.portalId}/projects/${projectId}/tasks?page=${page}&per_page=${perPage}`
-      : `/portal/${this.config.portalId}/tasks?page=${page}&per_page=${perPage}`;
+      ? `/portal/${this.config.portalName}/projects/${projectId}/tasks?page=${page}&per_page=${perPage}`
+      : `/portal/${this.config.portalName}/tasks?page=${page}&per_page=${perPage}`;
     const data = await this.makeRequest(endpoint);
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
@@ -1074,7 +1074,7 @@ class ZohoProjectsServer {
 
   private async getTask(projectId: string, taskId: string) {
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}`
+      `/portal/${this.config.portalName}/projects/${projectId}/tasks/${taskId}`
     );
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
@@ -1095,7 +1095,7 @@ class ZohoProjectsServer {
     // Strategy 1: Try project-level search if we have a project ID
     if (projectId) {
       try {
-        const searchEndpoint = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/search?search_term=${encodeURIComponent(normalizedPrefix)}&module=tasks&index=0&range=50`;
+        const searchEndpoint = `${restBaseUrl}/restapi/portal/${this.config.portalName}/projects/${projectId}/search?search_term=${encodeURIComponent(normalizedPrefix)}&module=tasks&index=0&range=50`;
 
         const response = await fetch(searchEndpoint, {
           method: 'GET',
@@ -1117,7 +1117,7 @@ class ZohoProjectsServer {
               const taskId = result.id_string || result.id;
               if (taskId) {
                 const fullTask = await this.makeRequest(
-                  `/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}`
+                  `/portal/${this.config.portalName}/projects/${projectId}/tasks/${taskId}`
                 );
                 return {
                   content: [{ type: "text", text: JSON.stringify(fullTask, null, 2) }],
@@ -1136,7 +1136,7 @@ class ZohoProjectsServer {
 
     // Strategy 2: Try portal-level search
     try {
-      const searchEndpoint = `${restBaseUrl}/restapi/portal/${this.config.portalId}/search?search_term=${encodeURIComponent(normalizedPrefix)}&module=tasks&index=0&range=50`;
+      const searchEndpoint = `${restBaseUrl}/restapi/portal/${this.config.portalName}/search?search_term=${encodeURIComponent(normalizedPrefix)}&module=tasks&index=0&range=50`;
       console.error(`[get_task_by_prefix] Searching portal: ${searchEndpoint}`);
 
       const response = await fetch(searchEndpoint, {
@@ -1165,7 +1165,7 @@ class ZohoProjectsServer {
             console.error(`[get_task_by_prefix] Match found! projectId=${taskProjectId}, taskId=${taskId}`);
             if (taskProjectId && taskId) {
               const fullTask = await this.makeRequest(
-                `/portal/${this.config.portalId}/projects/${taskProjectId}/tasks/${taskId}`
+                `/portal/${this.config.portalName}/projects/${taskProjectId}/tasks/${taskId}`
               );
               return {
                 content: [{ type: "text", text: JSON.stringify(fullTask, null, 2) }],
@@ -1192,8 +1192,8 @@ class ZohoProjectsServer {
 
     while (page <= maxPages) {
       const endpoint = projectId
-        ? `/portal/${this.config.portalId}/projects/${projectId}/tasks?page=${page}&per_page=${perPage}`
-        : `/portal/${this.config.portalId}/tasks?page=${page}&per_page=${perPage}`;
+        ? `/portal/${this.config.portalName}/projects/${projectId}/tasks?page=${page}&per_page=${perPage}`
+        : `/portal/${this.config.portalName}/tasks?page=${page}&per_page=${perPage}`;
 
       const data = await this.makeRequest(endpoint);
       const tasks = data.tasks || [];
@@ -1204,7 +1204,7 @@ class ZohoProjectsServer {
           const taskProjectId = projectId || task.project?.id;
           if (taskProjectId) {
             const fullTask = await this.makeRequest(
-              `/portal/${this.config.portalId}/projects/${taskProjectId}/tasks/${task.id}`
+              `/portal/${this.config.portalName}/projects/${taskProjectId}/tasks/${task.id}`
             );
             return {
               content: [{ type: "text", text: JSON.stringify(fullTask, null, 2) }],
@@ -1254,7 +1254,7 @@ class ZohoProjectsServer {
       };
     }
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${project_id}/tasks`,
+      `/portal/${this.config.portalName}/projects/${project_id}/tasks`,
       "POST",
       taskData
     );
@@ -1297,7 +1297,7 @@ class ZohoProjectsServer {
       };
     }
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${project_id}/tasks/${task_id}`,
+      `/portal/${this.config.portalName}/projects/${project_id}/tasks/${task_id}`,
       "PATCH",
       taskData
     );
@@ -1313,7 +1313,7 @@ class ZohoProjectsServer {
 
   private async deleteTask(projectId: string, taskId: string) {
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}`,
+      `/portal/${this.config.portalName}/projects/${projectId}/tasks/${taskId}`,
       "DELETE"
     );
     return {
@@ -1337,8 +1337,8 @@ class ZohoProjectsServer {
 
     // Try multiple possible endpoints for restoring from trash
     const endpoints = [
-      `${restBaseUrl}/restapi/portal/${this.config.portalId}/trash/restore/`,
-      `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/trash/restore/`,
+      `${restBaseUrl}/restapi/portal/${this.config.portalName}/trash/restore/`,
+      `${restBaseUrl}/restapi/portal/${this.config.portalName}/projects/${projectId}/trash/restore/`,
     ];
 
     let lastError = '';
@@ -1386,7 +1386,7 @@ class ZohoProjectsServer {
       tasklistData.milestone = { id: milestone_id };
     }
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${project_id}/tasklists`,
+      `/portal/${this.config.portalName}/projects/${project_id}/tasklists`,
       "POST",
       tasklistData
     );
@@ -1402,7 +1402,7 @@ class ZohoProjectsServer {
 
   private async moveTask(projectId: string, taskId: string, tasklistId: string) {
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/move`,
+      `/portal/${this.config.portalName}/projects/${projectId}/tasks/${taskId}/move`,
       "POST",
       { target_tasklist_id: tasklistId }
     );
@@ -1418,7 +1418,7 @@ class ZohoProjectsServer {
 
   private async deleteTasklist(projectId: string, tasklistId: string) {
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}/tasklists/${tasklistId}`,
+      `/portal/${this.config.portalName}/projects/${projectId}/tasklists/${tasklistId}`,
       "DELETE"
     );
     return {
@@ -1438,8 +1438,8 @@ class ZohoProjectsServer {
     perPage: number = 10
   ) {
     const endpoint = projectId
-      ? `/portal/${this.config.portalId}/projects/${projectId}/issues?page=${page}&per_page=${perPage}`
-      : `/portal/${this.config.portalId}/issues?page=${page}&per_page=${perPage}`;
+      ? `/portal/${this.config.portalName}/projects/${projectId}/issues?page=${page}&per_page=${perPage}`
+      : `/portal/${this.config.portalName}/issues?page=${page}&per_page=${perPage}`;
     const data = await this.makeRequest(endpoint);
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
@@ -1448,7 +1448,7 @@ class ZohoProjectsServer {
 
   private async getIssue(projectId: string, issueId: string) {
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}/issues/${issueId}`
+      `/portal/${this.config.portalName}/projects/${projectId}/issues/${issueId}`
     );
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
@@ -1458,7 +1458,7 @@ class ZohoProjectsServer {
   private async createIssue(params: any) {
     const { project_id, ...issueData } = params;
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${project_id}/issues`,
+      `/portal/${this.config.portalName}/projects/${project_id}/issues`,
       "POST",
       issueData
     );
@@ -1475,7 +1475,7 @@ class ZohoProjectsServer {
   private async updateIssue(params: any) {
     const { project_id, issue_id, ...issueData } = params;
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${project_id}/issues/${issue_id}`,
+      `/portal/${this.config.portalName}/projects/${project_id}/issues/${issue_id}`,
       "PATCH",
       issueData
     );
@@ -1496,7 +1496,7 @@ class ZohoProjectsServer {
     perPage: number = 10
   ) {
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}/phases?page=${page}&per_page=${perPage}`
+      `/portal/${this.config.portalName}/projects/${projectId}/phases?page=${page}&per_page=${perPage}`
     );
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
@@ -1506,7 +1506,7 @@ class ZohoProjectsServer {
   private async createPhase(params: any) {
     const { project_id, ...phaseData } = params;
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${project_id}/phases`,
+      `/portal/${this.config.portalName}/projects/${project_id}/phases`,
       "POST",
       phaseData
     );
@@ -1527,7 +1527,7 @@ class ZohoProjectsServer {
     const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
 
     // First fetch the existing milestone to get required fields
-    const getEndpoint = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${project_id}/milestones/${phase_id}/`;
+    const getEndpoint = `${restBaseUrl}/restapi/portal/${this.config.portalName}/projects/${project_id}/milestones/${phase_id}/`;
     const getResponse = await fetch(getEndpoint, {
       method: 'GET',
       headers: {
@@ -1592,7 +1592,7 @@ class ZohoProjectsServer {
 
     if (phaseData.status) formData.append('status', phaseData.status);
 
-    const updateEndpoint = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${project_id}/milestones/${phase_id}/`;
+    const updateEndpoint = `${restBaseUrl}/restapi/portal/${this.config.portalName}/projects/${project_id}/milestones/${phase_id}/`;
     const response = await fetch(updateEndpoint, {
       method: 'POST',
       headers: {
@@ -1624,7 +1624,7 @@ class ZohoProjectsServer {
   private async deletePhase(projectId: string, phaseId: string, isRetry: boolean = false): Promise<any> {
     // Use REST API for milestone deletion
     const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
-    const endpoint = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/milestones/${phaseId}/`;
+    const endpoint = `${restBaseUrl}/restapi/portal/${this.config.portalName}/projects/${projectId}/milestones/${phaseId}/`;
 
     const response = await fetch(endpoint, {
       method: 'DELETE',
@@ -1680,8 +1680,8 @@ class ZohoProjectsServer {
     const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
 
     const endpoint = project_id
-      ? `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${project_id}/search?search_term=${encodeURIComponent(search_term)}&module=${module}&index=${index}&range=${per_page}`
-      : `${restBaseUrl}/restapi/portal/${this.config.portalId}/search?search_term=${encodeURIComponent(search_term)}&module=${module}&index=${index}&range=${per_page}`;
+      ? `${restBaseUrl}/restapi/portal/${this.config.portalName}/projects/${project_id}/search?search_term=${encodeURIComponent(search_term)}&module=${module}&index=${index}&range=${per_page}`
+      : `${restBaseUrl}/restapi/portal/${this.config.portalName}/search?search_term=${encodeURIComponent(search_term)}&module=${module}&index=${index}&range=${per_page}`;
 
     // Make direct fetch since this uses different base URL
     const response = await fetch(endpoint, {
@@ -1709,8 +1709,8 @@ class ZohoProjectsServer {
   // Users
   private async listUsers(projectId?: string) {
     const endpoint = projectId
-      ? `/portal/${this.config.portalId}/projects/${projectId}/users`
-      : `/portal/${this.config.portalId}/users`;
+      ? `/portal/${this.config.portalName}/projects/${projectId}/users`
+      : `/portal/${this.config.portalName}/users`;
     const data = await this.makeRequest(endpoint);
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
@@ -1722,7 +1722,7 @@ class ZohoProjectsServer {
     // Try the fields endpoint to get status field options
     try {
       const data = await this.makeRequest(
-        `/portal/${this.config.portalId}/projects/${projectId}/fields?module=Tasks`
+        `/portal/${this.config.portalName}/projects/${projectId}/fields?module=Tasks`
       );
 
       // Extract status field from the response
@@ -1767,7 +1767,7 @@ class ZohoProjectsServer {
     perPage: number = 10
   ) {
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/comments?page=${page}&per_page=${perPage}`
+      `/portal/${this.config.portalName}/projects/${projectId}/tasks/${taskId}/comments?page=${page}&per_page=${perPage}`
     );
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
@@ -1796,7 +1796,7 @@ class ZohoProjectsServer {
     }
 
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/comments`,
+      `/portal/${this.config.portalName}/projects/${projectId}/tasks/${taskId}/comments`,
       "POST",
       { comment: content }
     );
@@ -1837,7 +1837,7 @@ class ZohoProjectsServer {
     }
 
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
+      `/portal/${this.config.portalName}/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
       "PATCH",
       { comment: content }
     );
@@ -1861,7 +1861,7 @@ class ZohoProjectsServer {
     commentId: string
   ) {
     const data = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
+      `/portal/${this.config.portalName}/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
       "DELETE"
     );
 
@@ -1897,7 +1897,7 @@ class ZohoProjectsServer {
 
     // Use REST API endpoint (v1/v2) for attachments - not v3
     const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
-    const url = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/attachments/`;
+    const url = `${restBaseUrl}/restapi/portal/${this.config.portalName}/projects/${projectId}/tasks/${taskId}/attachments/`;
 
     // Create multipart form data
     const boundary = `----FormBoundary${Date.now()}`;
@@ -1986,7 +1986,7 @@ class ZohoProjectsServer {
       await this.refreshAccessToken();
     }
 
-    const url = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/attachments/`;
+    const url = `${restBaseUrl}/restapi/portal/${this.config.portalName}/projects/${projectId}/tasks/${taskId}/attachments/`;
 
     const response = await fetch(url, {
       method: 'GET',
@@ -2020,7 +2020,7 @@ class ZohoProjectsServer {
     // All attachments use the standard attachments endpoint
     // Note: Deleting attachments requires ZohoPC.files.ALL scope
     const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
-    const url = `${restBaseUrl}/restapi/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}/`;
+    const url = `${restBaseUrl}/restapi/portal/${this.config.portalName}/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}/`;
 
     const response = await fetch(url, {
       method: 'DELETE',
@@ -2095,7 +2095,7 @@ class ZohoProjectsServer {
     const domains = ['projectsapi.zoho.com', 'projectsapi.zoho.eu', 'projects.zoho.com', 'projects.zoho.eu'];
     const endpoints = [
       // API endpoint for inline attachments
-      (domain: string) => `https://${domain}/restapi/portal/${this.config.portalId}/inlineattachment/?file=${encodeURIComponent(fileParam)}`,
+      (domain: string) => `https://${domain}/restapi/portal/${this.config.portalName}/inlineattachment/?file=${encodeURIComponent(fileParam)}`,
       // Direct viewInlineAttachment endpoint (ForApi variant)
       (domain: string) => `https://${domain.replace('projectsapi.', 'projects.')}/viewInlineAttachmentForApi/image?file=${encodeURIComponent(fileParam)}`,
       // Direct viewInlineAttachment endpoint (non-ForApi variant)
@@ -2166,7 +2166,7 @@ class ZohoProjectsServer {
   private async downloadTaskImages(projectId: string, taskId: string, outputDir: string) {
     // Get the task first to get its description
     const taskData = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}/tasks/${taskId}`
+      `/portal/${this.config.portalName}/projects/${projectId}/tasks/${taskId}`
     );
 
     const description = taskData.tasks?.[0]?.description || taskData.description || '';
@@ -2270,7 +2270,7 @@ class ZohoProjectsServer {
     // 1. Fetch project details
     console.error('Fetching project details...');
     const projectData = await this.makeRequest(
-      `/portal/${this.config.portalId}/projects/${projectId}`
+      `/portal/${this.config.portalName}/projects/${projectId}`
     );
     const project = projectData.projects?.[0] || projectData;
 
@@ -2281,7 +2281,7 @@ class ZohoProjectsServer {
     const milestonePerPage = 100;
     while (true) {
       const phasesData = await this.makeRequest(
-        `/portal/${this.config.portalId}/projects/${projectId}/phases?page=${milestonePage}&per_page=${milestonePerPage}`
+        `/portal/${this.config.portalName}/projects/${projectId}/phases?page=${milestonePage}&per_page=${milestonePerPage}`
       );
       const phases = phasesData.phases || [];
       milestones.push(...phases);
@@ -2301,7 +2301,7 @@ class ZohoProjectsServer {
     const taskPerPage = 100;
     while (true) {
       const tasksData = await this.makeRequest(
-        `/portal/${this.config.portalId}/projects/${projectId}/tasks?page=${taskPage}&per_page=${taskPerPage}`
+        `/portal/${this.config.portalName}/projects/${projectId}/tasks?page=${taskPage}&per_page=${taskPerPage}`
       );
       const tasksList = tasksData.tasks || [];
       tasks.push(...tasksList);
@@ -2366,7 +2366,7 @@ class ZohoProjectsServer {
             let downloaded = false;
             const domains = ['projectsapi.zoho.com', 'projectsapi.zoho.eu', 'projects.zoho.com', 'projects.zoho.eu'];
             const endpoints = [
-              (domain: string) => `https://${domain}/restapi/portal/${this.config.portalId}/inlineattachment/?file=${encodeURIComponent(fileParam)}`,
+              (domain: string) => `https://${domain}/restapi/portal/${this.config.portalName}/inlineattachment/?file=${encodeURIComponent(fileParam)}`,
               (domain: string) => `https://${domain.replace('projectsapi.', 'projects.')}/viewInlineAttachmentForApi/image?file=${encodeURIComponent(fileParam)}`,
               (domain: string) => `https://${domain.replace('projectsapi.', 'projects.')}/viewInlineAttachment/image?file=${encodeURIComponent(fileParam)}`,
             ];
