@@ -1063,10 +1063,33 @@ class ZohoProjectsServer {
     page: number = 1,
     perPage: number = 10
   ) {
+    const restBaseUrl = (this.config.apiDomain || 'https://projectsapi.zoho.com').replace('/api/v3', '');
+
     const endpoint = projectId
-      ? `/portal/${this.config.portalName}/projects/${projectId}/tasks?page=${page}&per_page=${perPage}`
-      : `/portal/${this.config.portalName}/tasks?page=${page}&per_page=${perPage}`;
-    const data = await this.makeRequest(endpoint);
+      ? `${restBaseUrl}/restapi/portal/${this.config.portalName}/projects/${projectId}/tasks/?page=${page}&per_page=${perPage}`
+      : `${restBaseUrl}/restapi/portal/${this.config.portalName}/tasks/?page=${page}&per_page=${perPage}`;
+
+    if (Date.now() >= this.tokenExpiresAt) {
+      await this.refreshAccessToken();
+    }
+
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${this.config.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new McpError(
+        ErrorCode.InternalError,
+        `List tasks error: ${response.status} - ${errorText}`
+      );
+    }
+
+    const data = await response.json();
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
     };
